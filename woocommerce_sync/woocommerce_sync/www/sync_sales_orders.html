@@ -4,7 +4,7 @@
 <div class="container">
     <div class="row">
         <div class="col-md-12">
-            <h1>WooCommerce Sales Order Sync</h1>
+            <h1>WooCommerce to ERPNext Sync</h1>
             
             <div class="card mt-4">
                 <div class="card-body">
@@ -54,7 +54,8 @@
             <div class="card mt-4">
                 <div class="card-body">
                     <h5 class="card-title">Manual Sync</h5>
-                    <button class="btn btn-primary" id="sync-button">Sync Sales Orders</button>
+                    <p class="text-muted">This will sync all processing orders from WooCommerce to ERPNext.</p>
+                    <button class="btn btn-primary" id="sync-button">Sync from WooCommerce</button>
                     <div id="sync-message" class="mt-3"></div>
                 </div>
             </div>
@@ -93,7 +94,7 @@
 
     function syncOrders() {
         $('#sync-button').prop('disabled', true);
-        $('#sync-message').html('<div class="alert alert-info">Syncing sales orders...</div>');
+        $('#sync-message').html('<div class="alert alert-info">Syncing orders from WooCommerce...</div>');
 
         frappe.call({
             method: 'woocommerce_sync.www.sync_sales_orders.sync_orders',

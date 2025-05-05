@@ -7,8 +7,8 @@ from woocommerce_sync.config.woocommerce_config import WOOCOMMERCE_CONFIG, SYNC_
 def sync_orders():
     try:
         sync = WooCommerceSync()
-        sync.sync_sales_orders()
-        return {"status": "success", "message": "Sales orders synced successfully"}
+        sync.sync_from_woocommerce()
+        return {"status": "success", "message": "Orders synced from WooCommerce successfully"}
     except Exception as e:
         frappe.log_error(f"Error in sync_orders: {str(e)}", "WooCommerce Sync Error")
         return {"status": "error", "message": str(e)}
