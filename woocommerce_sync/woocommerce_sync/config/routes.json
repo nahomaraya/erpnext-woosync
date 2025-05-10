@@ -1,0 +1,9 @@
+{
+    "routes": [
+        {
+            "name": "sync-sales-orders",
+            "route": "/sync-sales-orders",
+            "page": "sync_sales_orders"
+        }
+    ]
+} 
