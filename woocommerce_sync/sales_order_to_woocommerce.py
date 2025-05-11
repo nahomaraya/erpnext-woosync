@@ -41,8 +41,10 @@ class WooCommerceSync:
 
         WooCommerceLogger.log_sync_start()
         try:
-            # Get orders from WooCommerce
-            response = self.wcapi.get("orders", params={"status": "processing"})
+            # Get orders from WooCommerce with all statuses
+            response = self.wcapi.get("orders", params={
+                "status": "pending,processing,on-hold,completed,cancelled,refunded,failed"
+            })
             
             if response.status_code != 200:
                 error_msg = f"Failed to fetch WooCommerce orders: {response.text}"
@@ -73,6 +75,19 @@ class WooCommerceSync:
             WooCommerceLogger.log_sync_end(False, str(e))
             WooCommerceLogger.log_error("WooCommerce Sync Error", e)
 
+    def get_erpnext_status(self, wc_status):
+        """Map WooCommerce status to ERPNext status"""
+        status_mapping = {
+            "pending": "Draft",
+            "processing": "To Deliver and Bill",
+            "on-hold": "On Hold",
+            "completed": "Completed",
+            "cancelled": "Cancelled",
+            "refunded": "Closed",
+            "failed": "Cancelled"
+        }
+        return status_mapping.get(wc_status, "Draft")
+
     def create_erpnext_order(self, wc_order):
         """Create Sales Order in ERPNext from WooCommerce order"""
         try:
@@ -84,12 +99,20 @@ class WooCommerceSync:
             )
 
             if existing_order:
-                WooCommerceLogger.log(
-                    "Order",
-                    "Warning",
-                    f"Order {wc_order['id']} already exists in ERPNext",
-                    details={"order_id": wc_order["id"], "existing_order": existing_order[0]["name"]}
-                )
+                # Update existing order status if needed
+                existing_order_doc = frappe.get_doc("Sales Order", existing_order[0]["name"])
+                new_status = self.get_erpnext_status(wc_order["status"])
+                
+                if existing_order_doc.status != new_status:
+                    existing_order_doc.status = new_status
+                    existing_order_doc.save()
+                    frappe.db.commit()
+                    WooCommerceLogger.log(
+                        "Order",
+                        "Info",
+                        f"Updated order {wc_order['id']} status to {new_status}",
+                        details={"order_id": wc_order["id"], "old_status": existing_order_doc.status, "new_status": new_status}
+                    )
                 return
 
             # Get or create customer
@@ -104,11 +127,15 @@ class WooCommerceSync:
                 "items": self.get_order_items(wc_order),
                 "taxes_and_charges": self.get_tax_template(),
                 "taxes": self.get_tax_details(wc_order),
-                "status": "Draft"
+                "status": self.get_erpnext_status(wc_order["status"])
             })
 
             sales_order.insert()
-            sales_order.submit()
+            
+            # Only submit if the status is not Draft or Cancelled
+            if sales_order.status not in ["Draft", "Cancelled"]:
+                sales_order.submit()
+            
             frappe.db.commit()
 
             WooCommerceLogger.log_order_creation(
