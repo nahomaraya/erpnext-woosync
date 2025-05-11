@@ -1,6 +1,6 @@
 import frappe
 from frappe import _
-from woocommerce_sync.sales_order_to_woocommerce import WooCommerceSync
+from woocommerce_sync.woocommerce_sync.sales_order_to_woocommerce import WooCommerceSync
 from woocommerce_sync.config.woocommerce_config import WOOCOMMERCE_CONFIG, SYNC_CONFIG
 
 @frappe.whitelist()
