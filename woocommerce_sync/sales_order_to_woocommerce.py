@@ -383,4 +383,110 @@ SYNC_CONFIG = {SYNC_CONFIG}
             "last_sync": self.sync_config.get("last_sync"),
             "sync_status": self.sync_config.get("sync_status"),
             "enable_sync": self.sync_config.get("enable_sync", False)
-        } 
+        }
+
+    def sync_invoice_to_woocommerce(self, invoice_name):
+        """Sync ERPNext Sales Invoice to WooCommerce"""
+        try:
+            # Get the invoice
+            invoice = frappe.get_doc("Sales Invoice", invoice_name)
+            
+            # Get the linked WooCommerce order ID
+            woocommerce_order_id = None
+            if invoice.sales_order:
+                sales_order = frappe.get_doc("Sales Order", invoice.sales_order)
+                woocommerce_order_id = sales_order.woocommerce_order_id
+
+            if not woocommerce_order_id:
+                raise ValueError("No WooCommerce order ID found for this invoice")
+
+            # Prepare invoice data for WooCommerce
+            invoice_data = {
+                "status": "completed",
+                "meta_data": [
+                    {
+                        "key": "erpnext_invoice",
+                        "value": invoice_name
+                    }
+                ]
+            }
+
+            # Update the order in WooCommerce
+            response = self.wcapi.put(f"orders/{woocommerce_order_id}", invoice_data)
+            
+            if response.status_code not in [200, 201]:
+                raise ValueError(f"Failed to update WooCommerce order: {response.text}")
+
+            # Log success
+            WooCommerceLogger.log(
+                "Invoice",
+                "Success",
+                f"Successfully synced invoice {invoice_name} to WooCommerce order {woocommerce_order_id}",
+                details={
+                    "invoice": invoice_name,
+                    "woocommerce_order": woocommerce_order_id,
+                    "response": response.json()
+                }
+            )
+
+            return {
+                "status": "success",
+                "message": f"Invoice {invoice_name} synced to WooCommerce successfully",
+                "woocommerce_order_id": woocommerce_order_id
+            }
+
+        except Exception as e:
+            WooCommerceLogger.log(
+                "Invoice",
+                "Error",
+                f"Failed to sync invoice {invoice_name} to WooCommerce: {str(e)}",
+                details={
+                    "invoice": invoice_name,
+                    "error": str(e)
+                }
+            )
+            raise
+
+    def get_invoice_sync_status(self, invoice_name):
+        """Get sync status of an invoice"""
+        try:
+            invoice = frappe.get_doc("Sales Invoice", invoice_name)
+            if not invoice.sales_order:
+                return {
+                    "status": "error",
+                    "message": "No Sales Order linked to this invoice"
+                }
+
+            sales_order = frappe.get_doc("Sales Order", invoice.sales_order)
+            if not sales_order.woocommerce_order_id:
+                return {
+                    "status": "error",
+                    "message": "No WooCommerce order linked to this invoice"
+                }
+
+            # Check if invoice is already synced
+            response = self.wcapi.get(f"orders/{sales_order.woocommerce_order_id}")
+            if response.status_code != 200:
+                return {
+                    "status": "error",
+                    "message": f"Failed to fetch WooCommerce order: {response.text}"
+                }
+
+            order_data = response.json()
+            is_synced = any(
+                meta["key"] == "erpnext_invoice" and meta["value"] == invoice_name
+                for meta in order_data.get("meta_data", [])
+            )
+
+            return {
+                "status": "success",
+                "is_synced": is_synced,
+                "woocommerce_order_id": sales_order.woocommerce_order_id,
+                "woocommerce_order_status": order_data.get("status")
+            }
+
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": str(e)
+            } 
