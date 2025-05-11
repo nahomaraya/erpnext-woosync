@@ -59,15 +59,51 @@ class WooCommerceSync:
                 details={"order_count": len(orders)}
             )
             
+            successful_syncs = 0
+            failed_syncs = 0
+            skipped_orders = []
+
             for order in orders:
-                self.create_erpnext_order(order)
+                try:
+                    self.create_erpnext_order(order)
+                    successful_syncs += 1
+                except Exception as e:
+                    failed_syncs += 1
+                    error_details = {
+                        "order_id": order.get("id", "unknown"),
+                        "error": str(e),
+                        "order_data": {
+                            "status": order.get("status"),
+                            "customer_email": order.get("billing", {}).get("email"),
+                            "total": order.get("total")
+                        }
+                    }
+                    WooCommerceLogger.log(
+                        "Order",
+                        "Error",
+                        f"Failed to sync order {order.get('id', 'unknown')}: {str(e)}",
+                        details=error_details
+                    )
+                    skipped_orders.append(error_details)
 
             # Update sync status
             self.sync_config["last_sync"] = now_datetime()
-            self.sync_config["sync_status"] = "Success"
+            self.sync_config["sync_status"] = "Partial Success" if failed_syncs > 0 else "Success"
             self.save_sync_status()
 
-            WooCommerceLogger.log_sync_end(True, f"Successfully synced {len(orders)} orders")
+            # Log final sync summary
+            WooCommerceLogger.log(
+                "Sync",
+                "Info",
+                f"Sync completed. Successful: {successful_syncs}, Failed: {failed_syncs}",
+                details={
+                    "successful_syncs": successful_syncs,
+                    "failed_syncs": failed_syncs,
+                    "skipped_orders": skipped_orders
+                }
+            )
+
+            WooCommerceLogger.log_sync_end(True, f"Successfully synced {successful_syncs} orders, {failed_syncs} failed")
 
         except Exception as e:
             self.sync_config["sync_status"] = f"Failed: {str(e)}"
@@ -91,6 +127,13 @@ class WooCommerceSync:
     def create_erpnext_order(self, wc_order):
         """Create Sales Order in ERPNext from WooCommerce order"""
         try:
+            # Validate required order data
+            if not wc_order.get("billing", {}).get("email"):
+                raise ValueError("Customer email is required")
+            
+            if not wc_order.get("line_items"):
+                raise ValueError("Order has no items")
+
             # Check if order already exists
             existing_order = frappe.get_all(
                 "Sales Order",
@@ -116,7 +159,18 @@ class WooCommerceSync:
                 return
 
             # Get or create customer
-            customer = self.get_or_create_customer(wc_order)
+            try:
+                customer = self.get_or_create_customer(wc_order)
+            except Exception as e:
+                raise ValueError(f"Failed to create/get customer: {str(e)}")
+
+            # Get order items
+            try:
+                items = self.get_order_items(wc_order)
+                if not items:
+                    raise ValueError("No valid items found in order")
+            except Exception as e:
+                raise ValueError(f"Failed to process order items: {str(e)}")
 
             # Create Sales Order
             sales_order = frappe.get_doc({
@@ -124,7 +178,7 @@ class WooCommerceSync:
                 "customer": customer,
                 "delivery_date": frappe.utils.today(),
                 "woocommerce_order_id": str(wc_order["id"]),
-                "items": self.get_order_items(wc_order),
+                "items": items,
                 "taxes_and_charges": self.get_tax_template(),
                 "taxes": self.get_tax_details(wc_order),
                 "status": self.get_erpnext_status(wc_order["status"])
@@ -168,13 +222,37 @@ class WooCommerceSync:
                 )
                 return existing_customer[0]["name"]
 
+            # Ensure Customer Group exists
+            customer_group = "All Customer Groups"
+            if not frappe.db.exists("Customer Group", customer_group):
+                customer_group_doc = frappe.get_doc({
+                    "doctype": "Customer Group",
+                    "customer_group_name": customer_group,
+                    "parent_customer_group": "All Customer Groups",
+                    "is_group": 0
+                })
+                customer_group_doc.insert(ignore_permissions=True)
+                frappe.db.commit()
+
+            # Ensure Territory exists
+            territory = "All Territories"
+            if not frappe.db.exists("Territory", territory):
+                territory_doc = frappe.get_doc({
+                    "doctype": "Territory",
+                    "territory_name": territory,
+                    "parent_territory": "All Territories",
+                    "is_group": 0
+                })
+                territory_doc.insert(ignore_permissions=True)
+                frappe.db.commit()
+
             # Create new customer
             customer = frappe.get_doc({
                 "doctype": "Customer",
                 "customer_name": f"{wc_order['billing']['first_name']} {wc_order['billing']['last_name']}",
                 "customer_type": "Individual",
-                "customer_group": "Commercial",
-                "territory": "United States",
+                "customer_group": customer_group,
+                "territory": territory,
                 "email_id": customer_email,
                 "phone": wc_order["billing"]["phone"],
                 "address_line1": wc_order["billing"]["address_1"],
@@ -184,7 +262,7 @@ class WooCommerceSync:
                 "country": wc_order["billing"]["country"]
             })
 
-            customer.insert()
+            customer.insert(ignore_permissions=True)
             frappe.db.commit()
 
             WooCommerceLogger.log_customer_creation(customer.customer_name, True)
