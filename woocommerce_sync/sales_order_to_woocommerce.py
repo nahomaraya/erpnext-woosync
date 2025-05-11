@@ -189,10 +189,18 @@ class WooCommerceSync:
     def get_or_create_item(self, wc_item):
         """Get or create item in ERPNext"""
         try:
-            # Check if item exists by SKU
+            # Generate item code from SKU or product name
+            item_code = wc_item.get("sku")
+            if not item_code:
+                # If SKU is not available, create a code from product name
+                item_code = frappe.scrub(wc_item["name"])[:20]  # Take first 20 chars of scrubbed name
+                # Add a random suffix to ensure uniqueness
+                item_code = f"{item_code}-{frappe.generate_hash(length=4)}"
+
+            # Check if item exists by item_code
             existing_item = frappe.get_all(
                 "Item",
-                filters={"item_code": wc_item["sku"]},
+                filters={"item_code": item_code},
                 fields=["name"]
             )
 
@@ -201,14 +209,14 @@ class WooCommerceSync:
                     "Item",
                     "Info",
                     f"Found existing item: {existing_item[0]['name']}",
-                    details={"sku": wc_item["sku"]}
+                    details={"item_code": item_code}
                 )
                 return existing_item[0]["name"]
 
             # Create new item
             item = frappe.get_doc({
                 "doctype": "Item",
-                "item_code": wc_item["sku"],
+                "item_code": item_code,
                 "item_name": wc_item["name"],
                 "description": wc_item.get("description", ""),
                 "item_group": "WooCommerce Products",
@@ -226,7 +234,7 @@ class WooCommerceSync:
             return item.name
 
         except Exception as e:
-            WooCommerceLogger.log_item_creation(wc_item["sku"], False, e)
+            WooCommerceLogger.log_item_creation(item_code if 'item_code' in locals() else 'unknown', False, e)
             raise
 
     def get_tax_template(self):
