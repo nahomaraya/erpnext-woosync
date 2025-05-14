@@ -19,7 +19,7 @@ function sync_to_woocommerce(frm) {
 
     // Call the server-side method
     frappe.call({
-        method: 'woocommerce_sync.sales_order_to_woocommerce.WooCommerceSync.sync_invoice_to_woocommerce',
+        method: 'woocommerce_sync.sync_invoice.sync_invoice',
         args: {
             invoice_name: frm.doc.name
         },

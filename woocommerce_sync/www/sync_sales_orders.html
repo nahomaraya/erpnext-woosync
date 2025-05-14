@@ -82,7 +82,7 @@
 
     function updateSyncStatus() {
         frappe.call({
-            method: 'woocommerce_sync.www.sync_sales_orders.get_sync_status',
+            method: 'woocommerce_sync.sync_sales_orders.get_sync_status',
             callback: function(response) {
                 if (response.message) {
                     $('#last-sync').text(response.message.last_sync || '-');
@@ -97,7 +97,7 @@
         $('#sync-message').html('<div class="alert alert-info">Syncing orders from WooCommerce...</div>');
 
         frappe.call({
-            method: 'woocommerce_sync.www.sync_sales_orders.sync_orders',
+            method: 'woocommerce_sync.sync_sales_orders.sync_orders',
             callback: function(response) {
                 if (response.message.status === 'success') {
                     $('#sync-message').html('<div class="alert alert-success">' + response.message.message + '</div>');
@@ -124,7 +124,7 @@
         };
 
         frappe.call({
-            method: 'woocommerce_sync.www.sync_sales_orders.update_config',
+            method: 'woocommerce_sync.sync_sales_orders.update_config',
             args: {
                 config_data: configData
             },

@@ -1,9 +1,9 @@
 {
     "routes": [
         {
-            "name": "sync-sales-orders",
-            "route": "/sync-sales-orders",
-            "page": "sync_sales_orders"
+            "name": "sync_sales_orders",
+            "page": "sync_sales_orders",
+            "path": "sync_sales_orders"
         }
     ]
 } 
