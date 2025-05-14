@@ -11,7 +11,7 @@ def sync_orders():
         return {"status": "success", "message": "Orders synced from WooCommerce successfully"}
     except Exception as e:
         frappe.log_error(f"Error in sync_orders: {str(e)}", "WooCommerce Sync Error")
-        return {"status": "error", "message": str(e)}
+        return {"status": "Failed", "message": str(e)}
 
 @frappe.whitelist()
 def get_sync_status():
@@ -19,7 +19,8 @@ def get_sync_status():
         sync = WooCommerceSync()
         return sync.get_sync_status()
     except Exception as e:
-        return {"status": "error", "message": str(e)}
+        frappe.log_error(f"Error in get_sync_status: {str(e)}", "WooCommerce Sync Error")
+        return {"status": "Failed", "message": str(e)}
 
 @frappe.whitelist()
 def update_config(config_data):
@@ -40,4 +41,4 @@ SYNC_CONFIG = {SYNC_CONFIG}
         
         return {"status": "success", "message": "Configuration updated successfully"}
     except Exception as e:
-        return {"status": "error", "message": str(e)} 
+        return {"status": "Failed", "message": str(e)} 

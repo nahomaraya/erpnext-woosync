@@ -10,7 +10,7 @@ def sync_invoice(invoice_name):
         return sync.sync_invoice_to_woocommerce(invoice_name)
     except Exception as e:
         frappe.log_error(f"Error in sync_invoice: {str(e)}", "WooCommerce Sync Error")
-        return {"status": "error", "message": str(e)}
+        return {"status": "Failed", "message": str(e)}
 
 @frappe.whitelist()
 def get_invoice_sync_status(invoice_name):

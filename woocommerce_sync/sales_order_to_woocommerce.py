@@ -453,14 +453,14 @@ SYNC_CONFIG = {SYNC_CONFIG}
             invoice = frappe.get_doc("Sales Invoice", invoice_name)
             if not invoice.sales_order:
                 return {
-                    "status": "error",
+                    "status": "Failed",
                     "message": "No Sales Order linked to this invoice"
                 }
 
             sales_order = frappe.get_doc("Sales Order", invoice.sales_order)
             if not sales_order.woocommerce_order_id:
                 return {
-                    "status": "error",
+                    "status": "Failed",
                     "message": "No WooCommerce order linked to this invoice"
                 }
 
@@ -468,7 +468,7 @@ SYNC_CONFIG = {SYNC_CONFIG}
             response = self.wcapi.get(f"orders/{sales_order.woocommerce_order_id}")
             if response.status_code != 200:
                 return {
-                    "status": "error",
+                    "status": "Failed",
                     "message": f"Failed to fetch WooCommerce order: {response.text}"
                 }
 
@@ -487,6 +487,6 @@ SYNC_CONFIG = {SYNC_CONFIG}
 
         except Exception as e:
             return {
-                "status": "error",
+                "status": "Failed",
                 "message": str(e)
             } 
