@@ -139,9 +139,10 @@ app_license = "MIT"
 # Overriding Methods
 # ------------------------------
 #
-# override_whitelisted_methods = {
-#	"frappe.desk.doctype.event.event.get_events": "woocommerce_sync.event.get_events"
-# }
+override_whitelisted_methods = {
+    "woocommerce_sync.sync_invoice.sync_invoice": "woocommerce_sync.sync_invoice.sync_invoice",
+    "woocommerce_sync.sync_invoice.get_invoice_sync_status": "woocommerce_sync.sync_invoice.get_invoice_sync_status"
+}
 #
 # each overriding function accepts a `data` argument;
 # generated from the base implementation of the doctype dashboard,
