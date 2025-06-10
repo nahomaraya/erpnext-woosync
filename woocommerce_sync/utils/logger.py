@@ -9,6 +9,11 @@ class WooCommerceLogger:
     def log(log_type, status, message, details=None, reference_doctype=None, reference_name=None, error_traceback=None, woocommerce_order_id=None):
         """Create a log entry in WooCommerce Sync Log"""
         try:
+            # Ensure status is one of the valid values
+            valid_statuses = ["Success", "Failed", "Warning", "Info"]
+            if status not in valid_statuses:
+                status = "Failed" if status.lower() in ["error", "failed"] else "Info"
+
             log = frappe.get_doc({
                 "doctype": "WooCommerce Sync Log",
                 "log_type": log_type,
