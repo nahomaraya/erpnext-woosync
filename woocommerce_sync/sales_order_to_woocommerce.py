@@ -246,31 +246,45 @@ class WooCommerceSync:
                 territory_doc.insert(ignore_permissions=True)
                 frappe.db.commit()
 
+            # Create customer name from billing information
+            first_name = wc_order["billing"].get("first_name", "").strip()
+            last_name = wc_order["billing"].get("last_name", "").strip()
+            
+            # If both first and last name are empty, use email as customer name
+            if not first_name and not last_name:
+                customer_name = customer_email.split("@")[0]  # Use part before @ as name
+            else:
+                customer_name = f"{first_name} {last_name}".strip()
+            
+            # If still empty, use a default name
+            if not customer_name:
+                customer_name = f"WooCommerce Customer {frappe.generate_hash(length=4)}"
+
             # Create new customer
             customer = frappe.get_doc({
                 "doctype": "Customer",
-                "customer_name": f"{wc_order['billing']['first_name']} {wc_order['billing']['last_name']}",
+                "customer_name": customer_name,
                 "customer_type": "Individual",
                 "customer_group": customer_group,
                 "territory": territory,
                 "email_id": customer_email,
-                "phone": wc_order["billing"]["phone"],
-                "address_line1": wc_order["billing"]["address_1"],
-                "city": wc_order["billing"]["city"],
-                "state": wc_order["billing"]["state"],
-                "pincode": wc_order["billing"]["postcode"],
-                "country": wc_order["billing"]["country"]
+                "phone": wc_order["billing"].get("phone", ""),
+                "address_line1": wc_order["billing"].get("address_1", ""),
+                "city": wc_order["billing"].get("city", ""),
+                "state": wc_order["billing"].get("state", ""),
+                "pincode": wc_order["billing"].get("postcode", ""),
+                "country": wc_order["billing"].get("country", "")
             })
 
             customer.insert(ignore_permissions=True)
             frappe.db.commit()
 
-            WooCommerceLogger.log_customer_creation(customer.customer_name, True)
+            WooCommerceLogger.log_customer_creation(customer_name, True)
             return customer.name
 
         except Exception as e:
             WooCommerceLogger.log_customer_creation(
-                f"{wc_order['billing']['first_name']} {wc_order['billing']['last_name']}",
+                customer_name if 'customer_name' in locals() else 'Unknown Customer',
                 False,
                 e
             )
