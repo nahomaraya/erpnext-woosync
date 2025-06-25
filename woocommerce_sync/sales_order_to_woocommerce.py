@@ -203,24 +203,36 @@ class WooCommerceSync:
             raise
 
     def get_or_create_customer(self, wc_order):
-        """Get or create customer in ERPNext"""
+        """Get or create customer in ERPNext, checking by woocommerce_customer_id from _links, then by email"""
         try:
-            # Check if customer exists by email
             customer_email = wc_order["billing"]["email"]
-            existing_customer = frappe.get_all(
-                "Customer",
-                filters={"email_id": customer_email},
-                fields=["name"]
-            )
+            woocommerce_customer_id = None
+            # Extract customer ID from _links if available
+            try:
+                href = wc_order.get("_links", {}).get("self", [{}])[0].get("href", "")
+                if href:
+                    woocommerce_customer_id = href.rstrip("/").split("/")[-1]
+            except Exception:
+                pass
 
-            if existing_customer:
-                WooCommerceLogger.log(
+            existing_customer = None
+            # 1. Check by woocommerce_customer_id if present
+            if woocommerce_customer_id:
+                existing_customer = frappe.get_all(
                     "Customer",
-                    "Info",
-                    f"Found existing customer: {existing_customer[0]['name']}",
-                    details={"email": customer_email}
+                    filters={"woocommerce_customer_id": str(woocommerce_customer_id)},
+                    fields=["name"]
                 )
-                return existing_customer[0]["name"]
+                if existing_customer:
+                    WooCommerceLogger.log(
+                        "Customer",
+                        "Info",
+                        f"Found existing customer by WooCommerce ID: {existing_customer[0]['name']}",
+                        details={"woocommerce_customer_id": woocommerce_customer_id}
+                    )
+                    return existing_customer[0]["name"]
+
+        
 
             # Ensure Customer Group exists
             customer_group = "All Customer Groups"
@@ -249,19 +261,15 @@ class WooCommerceSync:
             # Create customer name from billing information
             first_name = wc_order["billing"].get("first_name", "").strip()
             last_name = wc_order["billing"].get("last_name", "").strip()
-            
-            # If both first and last name are empty, use email as customer name
             if not first_name and not last_name:
-                customer_name = customer_email.split("@")[0]  # Use part before @ as name
+                customer_name = customer_email.split("@")[0]
             else:
                 customer_name = f"{first_name} {last_name}".strip()
-            
-            # If still empty, use a default name
             if not customer_name:
                 customer_name = f"WooCommerce Customer {frappe.generate_hash(length=4)}"
 
-            # Create new customer
-            customer = frappe.get_doc({
+            # Create new customer, set woocommerce_customer_id if available
+            customer_data = {
                 "doctype": "Customer",
                 "customer_name": customer_name,
                 "customer_type": "Individual",
@@ -274,8 +282,11 @@ class WooCommerceSync:
                 "state": wc_order["billing"].get("state", ""),
                 "pincode": wc_order["billing"].get("postcode", ""),
                 "country": wc_order["billing"].get("country", "")
-            })
+            }
+            if woocommerce_customer_id:
+                customer_data["woocommerce_customer_id"] = str(woocommerce_customer_id)
 
+            customer = frappe.get_doc(customer_data)
             customer.insert(ignore_permissions=True)
             frappe.db.commit()
 
