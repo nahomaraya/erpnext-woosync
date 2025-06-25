@@ -203,24 +203,17 @@ class WooCommerceSync:
             raise
 
     def get_or_create_customer(self, wc_order):
-        """Get or create customer in ERPNext, checking by woocommerce_customer_id from _links, then by email"""
+        """Get or create customer in ERPNext, checking by woocommerce_customer_id from customer_id, then create if not found"""
         try:
             customer_email = wc_order["billing"]["email"]
-            woocommerce_customer_id = None
-            # Extract customer ID from _links if available
-            try:
-                href = wc_order.get("_links", {}).get("self", [{}])[0].get("href", "")
-                if href:
-                    woocommerce_customer_id = href.rstrip("/").split("/")[-1]
-            except Exception:
-                pass
+            woocommerce_customer_id = wc_order.get("customer_id")
 
             if woocommerce_customer_id:
                 WooCommerceLogger.log(
                     "Customer",
                     "Debug",
-                    f"Extracted woocommerce_customer_id: {woocommerce_customer_id}",
-                    details={"href": href, "wc_order": wc_order}
+                    f"Using woocommerce_customer_id from customer_id: {woocommerce_customer_id}",
+                    details={"customer_id": woocommerce_customer_id, "wc_order": wc_order}
                 )
                 existing_customer = frappe.get_all(
                     "Customer",
@@ -246,8 +239,8 @@ class WooCommerceSync:
                 WooCommerceLogger.log(
                     "Customer",
                     "Debug",
-                    "No woocommerce_customer_id could be extracted from order _links. Proceeding to create new customer.",
-                    details={"_links": wc_order.get("_links", {}), "wc_order": wc_order}
+                    "No woocommerce_customer_id (customer_id) present in order. Proceeding to create new customer.",
+                    details={"wc_order": wc_order}
                 )
 
             # Ensure Customer Group exists
