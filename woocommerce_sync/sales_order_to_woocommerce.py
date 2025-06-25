@@ -215,9 +215,13 @@ class WooCommerceSync:
             except Exception:
                 pass
 
-            existing_customer = None
-            # 1. Check by woocommerce_customer_id if present
             if woocommerce_customer_id:
+                WooCommerceLogger.log(
+                    "Customer",
+                    "Debug",
+                    f"Extracted woocommerce_customer_id: {woocommerce_customer_id}",
+                    details={"href": href, "wc_order": wc_order}
+                )
                 existing_customer = frappe.get_all(
                     "Customer",
                     filters={"woocommerce_customer_id": str(woocommerce_customer_id)},
@@ -228,11 +232,23 @@ class WooCommerceSync:
                         "Customer",
                         "Info",
                         f"Found existing customer by WooCommerce ID: {existing_customer[0]['name']}",
-                        details={"woocommerce_customer_id": woocommerce_customer_id}
+                        details={"woocommerce_customer_id": woocommerce_customer_id, "wc_order": wc_order}
                     )
                     return existing_customer[0]["name"]
-
-        
+                else:
+                    WooCommerceLogger.log(
+                        "Customer",
+                        "Debug",
+                        f"No customer found with woocommerce_customer_id: {woocommerce_customer_id}. Proceeding to create new customer.",
+                        details={"woocommerce_customer_id": woocommerce_customer_id, "wc_order": wc_order}
+                    )
+            else:
+                WooCommerceLogger.log(
+                    "Customer",
+                    "Debug",
+                    "No woocommerce_customer_id could be extracted from order _links. Proceeding to create new customer.",
+                    details={"_links": wc_order.get("_links", {}), "wc_order": wc_order}
+                )
 
             # Ensure Customer Group exists
             customer_group = "All Customer Groups"
