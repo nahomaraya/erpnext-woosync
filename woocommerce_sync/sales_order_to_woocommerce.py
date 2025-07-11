@@ -329,12 +329,39 @@ class WooCommerceSync:
         """Get or create item in ERPNext"""
         try:
             # Generate item code from SKU or product name
+        # Try to get SKU from main field first
             item_code = wc_item.get("sku")
+
+            # If not available, try fetching it from meta_data
             if not item_code:
-                # If SKU is not available, create a code from product name
-                item_code = frappe.scrub(wc_item["name"])[:20]  # Take first 20 chars of scrubbed name
-                # Add a random suffix to ensure uniqueness
+                for meta in wc_item.get("meta_data", []):
+                    # Normalize the key by stripping whitespace
+                    key = meta.get("key", "").strip().lower()
+                    if key == "sku":
+                        item_code = meta.get("value")
+                        break
+
+            # Still not found? Try to extract from _ywapo_meta_data
+            if not item_code:
+                for meta in wc_item.get("meta_data", []):
+                    if meta.get("key") == "_ywapo_meta_data":
+                        for entry in meta.get("value", []):
+                            for subkey, subval in entry.items():
+                                if isinstance(subval, dict):
+                                    label = subval.get("display_label", "").strip().lower()
+                                    if label == "sku":
+                                        item_code = subval.get("addon_value")
+                                        break
+                            if item_code:
+                                break
+                    if item_code:
+                        break
+
+            # If still no SKU, generate fallback item_code
+            if not item_code:
+                item_code = frappe.scrub(wc_item["name"])[:20]
                 item_code = f"{item_code}-{frappe.generate_hash(length=4)}"
+
 
             # Check if item exists by item_code
             existing_item = frappe.get_all(
