@@ -362,12 +362,22 @@ class WooCommerceSync:
                 item_code = frappe.scrub(wc_item["name"])[:20]
                 item_code = f"{item_code}-{frappe.generate_hash(length=4)}"
 
-
-            # Check if item exists by item_code
+            WooCommerceLogger.log(
+                "Item",
+                "Debug",
+                f"Checking for existing item by name: '{item_code.strip()}'",
+                details={"item_code": item_code.strip()}
+            )
             existing_item = frappe.get_all(
                 "Item",
-                filters={"name": item_code},
+                filters={"name": item_code.strip()},
                 fields=["name"]
+            )
+            WooCommerceLogger.log(
+                "Item",
+                "Debug",
+                f"Existing item lookup result for '{item_code.strip()}': {existing_item}",
+                details={"item_code": item_code.strip(), "existing_item": existing_item}
             )
 
             if existing_item:
