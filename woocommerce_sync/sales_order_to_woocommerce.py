@@ -366,7 +366,7 @@ class WooCommerceSync:
             # Check if item exists by item_code
             existing_item = frappe.get_all(
                 "Item",
-                filters={"item_code": item_code},
+                filters={"name": item_code},
                 fields=["name"]
             )
 
@@ -383,8 +383,8 @@ class WooCommerceSync:
             item = frappe.get_doc({
                 "doctype": "Item",
                 "item_code": item_code,
-                "item_name": wc_item["name"],
-                "description": wc_item.get("description", ""),
+                "item_name": wc_item["name"][:140],
+                "description": wc_item.get("description", "")[:1000],
                 "item_group": "WooCommerce Products",
                 "stock_uom": "Oz",
                 "is_stock_item": 1,
