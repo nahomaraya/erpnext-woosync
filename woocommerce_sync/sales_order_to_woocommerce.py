@@ -335,9 +335,9 @@ class WooCommerceSync:
             # If not available, try fetching it from meta_data
             if not item_code:
                 for meta in wc_item.get("meta_data", []):
-                    # Normalize the key by stripping whitespace
                     key = meta.get("key", "").strip().lower()
-                    if key == "sku":
+                    display_key = meta.get("display_key", "").strip().lower()
+                    if key == "sku" or display_key == "sku":
                         item_code = meta.get("value")
                         break
 
