@@ -330,6 +330,12 @@ class WooCommerceSync:
         try:
             # Generate item code from SKU or product name
         # Try to get SKU from main field first
+            WooCommerceLogger.log(
+                "Item",
+                "Info",
+                f"Checking for existing item by name",
+                details={"item_code": wc_item}
+            )
             item_code = wc_item.get("sku")
 
             # If not available, try fetching it from meta_data
