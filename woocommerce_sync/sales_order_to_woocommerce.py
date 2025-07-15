@@ -80,7 +80,7 @@ class WooCommerceSync:
                     }
                     WooCommerceLogger.log(
                         "Order",
-                        "Error",
+                        "Info",
                         f"Failed to sync order {order.get('id', 'unknown')}: {str(e)}",
                         details=error_details
                     )
@@ -211,7 +211,7 @@ class WooCommerceSync:
             if woocommerce_customer_id:
                 WooCommerceLogger.log(
                     "Customer",
-                    "Debug",
+                    "Info",
                     f"Using woocommerce_customer_id from customer_id: {woocommerce_customer_id}",
                     details={"customer_id": woocommerce_customer_id, "wc_order": wc_order}
                 )
@@ -231,14 +231,14 @@ class WooCommerceSync:
                 else:
                     WooCommerceLogger.log(
                         "Customer",
-                        "Debug",
+                        "Info",
                         f"No customer found with woocommerce_customer_id: {woocommerce_customer_id}. Proceeding to create new customer.",
                         details={"woocommerce_customer_id": woocommerce_customer_id, "wc_order": wc_order}
                     )
             else:
                 WooCommerceLogger.log(
                     "Customer",
-                    "Debug",
+                    "Info",
                     "No woocommerce_customer_id (customer_id) present in order. Proceeding to create new customer.",
                     details={"wc_order": wc_order}
                 )
@@ -333,7 +333,7 @@ class WooCommerceSync:
             WooCommerceLogger.log(
                 "Item",
                 "Info",
-                f"Checking for existing item by name",
+                f"Checking for existing item by name'",
                 details={"item_code": wc_item}
             )
             item_code = wc_item.get("sku")
@@ -370,7 +370,7 @@ class WooCommerceSync:
 
             WooCommerceLogger.log(
                 "Item",
-                "Debug",
+                "Info",
                 f"Checking for existing item by name: '{item_code.strip()}'",
                 details={"item_code": item_code.strip()}
             )
@@ -381,7 +381,7 @@ class WooCommerceSync:
             )
             WooCommerceLogger.log(
                 "Item",
-                "Debug",
+                "Info",
                 f"Existing item lookup result for '{item_code.strip()}': {existing_item}",
                 details={"item_code": item_code.strip(), "existing_item": existing_item}
             )
@@ -515,7 +515,7 @@ SYNC_CONFIG = {SYNC_CONFIG}
         except Exception as e:
             WooCommerceLogger.log(
                 "Invoice",
-                "Error",
+                "Info",
                 f"Failed to sync invoice {invoice_name} to WooCommerce: {str(e)}",
                 details={
                     "invoice": invoice_name,
