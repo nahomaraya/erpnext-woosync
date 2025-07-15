@@ -33,7 +33,7 @@ function sync_to_woocommerce(frm) {
                 });
             } else {
                 frappe.msgprint({
-                    title: __('Error'),
+                    title: __('Failed'),
                     message: r.message.message || __('Failed to sync to WooCommerce'),
                     indicator: 'red'
                 });
@@ -42,7 +42,7 @@ function sync_to_woocommerce(frm) {
         error: function(r) {
             frappe.hide_progress();
             frappe.msgprint({
-                title: __('Error'),
+                title: __('Failed'),
                 message: __('Failed to sync to WooCommerce'),
                 indicator: 'red'
             });
