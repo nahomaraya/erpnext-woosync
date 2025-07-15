@@ -116,7 +116,7 @@ class WooCommerceLogger:
         if error:
             message = f"{message} - {str(error)}"
         WooCommerceLogger.log(
-            log_type="Error",
+            log_type="Warning",
             status="Failed",
             message=message,
             details=details,
