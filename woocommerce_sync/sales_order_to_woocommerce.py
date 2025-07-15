@@ -127,12 +127,15 @@ class WooCommerceSync:
     def create_erpnext_order(self, wc_order):
         """Create Sales Order in ERPNext from WooCommerce order"""
         try:
+            WooCommerceLogger.log("Order", "Info", f"Starting order sync for WooCommerce order {wc_order.get('id')}")
+            
             # Validate required order data
             if not wc_order.get("billing", {}).get("email"):
                 raise ValueError("Customer email is required")
-            
             if not wc_order.get("line_items"):
                 raise ValueError("Order has no items")
+
+            WooCommerceLogger.log("Order", "Info", "Validated email and line items", details={"order_id": wc_order.get("id")})
 
             # Check if order already exists
             existing_order = frappe.get_all(
@@ -142,29 +145,30 @@ class WooCommerceSync:
             )
 
             if existing_order:
+                WooCommerceLogger.log("Order", "Info", f"Order {wc_order['id']} already exists. Checking for status update.")
                 # Update existing order status if needed
                 existing_order_doc = frappe.get_doc("Sales Order", existing_order[0]["name"])
                 new_status = self.get_erpnext_status(wc_order["status"])
-                
+
                 if existing_order_doc.status != new_status:
+                    WooCommerceLogger.log("Order", "Info", f"Updating order {existing_order_doc.name} status from {existing_order_doc.status} to {new_status}")
                     existing_order_doc.status = new_status
                     existing_order_doc.save()
                     frappe.db.commit()
-                    WooCommerceLogger.log(
-                        "Order",
-                        "Info",
-                        f"Updated order {wc_order['id']} status to {new_status}",
-                        details={"order_id": wc_order["id"], "old_status": existing_order_doc.status, "new_status": new_status}
-                    )
+                    WooCommerceLogger.log("Order", "Success", f"Updated existing order status", details={"order_id": wc_order["id"]})
                 return
 
             # Get or create customer
+            WooCommerceLogger.log("Order", "Info", f"Getting or creating customer for order {wc_order['id']}")
             try:
                 customer = self.get_or_create_customer(wc_order)
             except Exception as e:
                 raise ValueError(f"Failed to create/get customer: {str(e)}")
 
+            WooCommerceLogger.log("Order", "Info", f"Customer obtained: {customer}")
+
             # Get order items
+            WooCommerceLogger.log("Order", "Info", f"Getting order items for WooCommerce order {wc_order['id']}")
             try:
                 items = self.get_order_items(wc_order)
                 if not items:
@@ -172,24 +176,35 @@ class WooCommerceSync:
             except Exception as e:
                 raise ValueError(f"Failed to process order items: {str(e)}")
 
+            WooCommerceLogger.log("Order", "Info", f"Order items retrieved", details={"item_count": len(items)})
+
+            # Get taxes
+            tax_template = self.get_tax_template()
+            tax_details = self.get_tax_details(wc_order)
+
+            WooCommerceLogger.log("Order", "Info", "Tax info retrieved", details={"tax_template": tax_template, "tax_details": tax_details})
+
             # Create Sales Order
+            WooCommerceLogger.log("Order", "Info", f"Creating Sales Order document for WooCommerce order {wc_order['id']}")
             sales_order = frappe.get_doc({
                 "doctype": "Sales Order",
                 "customer": customer,
                 "delivery_date": frappe.utils.today(),
                 "woocommerce_order_id": str(wc_order["id"]),
                 "items": items,
-                "taxes_and_charges": self.get_tax_template(),
-                "taxes": self.get_tax_details(wc_order),
+                "taxes_and_charges": tax_template,
+                "taxes": tax_details,
                 "status": self.get_erpnext_status(wc_order["status"])
             })
 
+            WooCommerceLogger.log("Order", "Info", f"Inserting Sales Order document for {wc_order['id']}")
             sales_order.insert()
-            
-            # Only submit if the status is not Draft or Cancelled
+
+            # Submit Sales Order if not in Draft or Cancelled
             if sales_order.status not in ["Draft", "Cancelled"]:
+                WooCommerceLogger.log("Order", "Info", f"Submitting Sales Order {sales_order.name}")
                 sales_order.submit()
-            
+
             frappe.db.commit()
 
             WooCommerceLogger.log_order_creation(
@@ -201,6 +216,7 @@ class WooCommerceSync:
         except Exception as e:
             WooCommerceLogger.log_order_creation(wc_order["id"], False, e)
             raise
+
 
     def get_or_create_customer(self, wc_order):
         """Get or create customer in ERPNext, checking by woocommerce_customer_id from customer_id, then create if not found"""
