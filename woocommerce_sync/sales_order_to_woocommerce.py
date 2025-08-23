@@ -46,12 +46,7 @@ class WooCommerceSync:
                 "status": "pending,processing,on-hold,completed,cancelled,refunded,failed"
             })
             
-            if response.status_code != 200:
-                error_msg = f"Failed to fetch WooCommerce orders: {response.text}"
-                WooCommerceLogger.log_error(error_msg, details={"response": response.text})
-                frappe.throw(error_msg)
-
-            orders = response.json()
+            orders = self.validate_api_response(response, "fetch orders")
             WooCommerceLogger.log(
                 "Sync",
                 "Info",
@@ -65,6 +60,8 @@ class WooCommerceSync:
 
             for order in orders:
                 try:
+                    # Validate order data first
+                    self.validate_woocommerce_order(order)
                     self.create_erpnext_order(order)
                     successful_syncs += 1
                 except Exception as e:
@@ -111,6 +108,120 @@ class WooCommerceSync:
             WooCommerceLogger.log_sync_end(False, str(e))
             WooCommerceLogger.log_error("WooCommerce Sync Error", e)
 
+    def validate_api_response(self, response, operation="fetch orders"):
+        """Validate WooCommerce API response"""
+        if response.status_code != 200:
+            error_msg = f"WooCommerce API error during {operation}: {response.status_code} - {response.text}"
+            WooCommerceLogger.log_error(error_msg, details={
+                "status_code": response.status_code,
+                "response_text": response.text,
+                "operation": operation
+            })
+            raise ValueError(error_msg)
+        
+        # Check if response is valid JSON
+        try:
+            data = response.json()
+            if not isinstance(data, list):
+                error_msg = f"Unexpected response format during {operation}: expected list, got {type(data)}"
+                WooCommerceLogger.log_error(error_msg, details={"response_type": str(type(data))})
+                raise ValueError(error_msg)
+            return data
+        except json.JSONDecodeError as e:
+            error_msg = f"Invalid JSON response during {operation}: {str(e)}"
+            WooCommerceLogger.log_error(error_msg, details={"response_text": response.text})
+            raise ValueError(error_msg)
+
+    def validate_woocommerce_order(self, wc_order):
+        """Validate WooCommerce order data before processing"""
+        errors = []
+        
+        # Check required fields
+        if not wc_order.get("id"):
+            errors.append("Order ID is missing")
+        
+        if not wc_order.get("billing"):
+            errors.append("Billing information is missing")
+        elif not wc_order["billing"].get("email"):
+            errors.append("Customer email is missing")
+        
+        if not wc_order.get("line_items"):
+            errors.append("Order has no line items")
+        else:
+            # Validate each line item
+            for i, item in enumerate(wc_order["line_items"]):
+                if not item.get("name"):
+                    errors.append(f"Line item {i+1} has no name")
+                if not item.get("quantity") or float(item.get("quantity", 0)) <= 0:
+                    errors.append(f"Line item {i+1} has invalid quantity")
+                if not item.get("price"):
+                    errors.append(f"Line item {i+1} has no price")
+        
+        # Check for valid status
+        valid_statuses = ["pending", "processing", "on-hold", "completed", "cancelled", "refunded", "failed"]
+        if wc_order.get("status") not in valid_statuses:
+            errors.append(f"Invalid order status: {wc_order.get('status')}")
+        
+        if errors:
+            raise ValueError(f"Order validation failed: {'; '.join(errors)}")
+        
+        return True
+
+    def update_order_with_retry(self, order_doc, new_status, max_retries=3):
+        """Update order status with retry logic for handling database conflicts"""
+        for attempt in range(max_retries):
+            try:
+                # Reload the document to get the latest state
+                if attempt > 0:
+                    order_doc = frappe.get_doc("Sales Order", order_doc.name)
+                
+                order_doc.status = new_status
+                order_doc.save()
+                frappe.db.commit()
+                return True, f"Successfully updated on attempt {attempt + 1}"
+                
+            except Exception as e:
+                if attempt < max_retries - 1:
+                    WooCommerceLogger.log("Order", "Info", f"Update attempt {attempt + 1} failed, retrying: {str(e)}", details={
+                        "order_name": order_doc.name,
+                        "attempt": attempt + 1,
+                        "error": str(e)
+                    })
+                    frappe.db.rollback()
+                    import time
+                    time.sleep(1)  # Brief pause before retry
+                else:
+                    return False, f"Failed after {max_retries} attempts: {str(e)}"
+        
+        return False, "Max retries exceeded"
+
+    def can_update_order_status(self, order_doc, new_status):
+        """Check if an order can be updated to the new status"""
+        # If order is already in the target status, no update needed
+        if order_doc.status == new_status:
+            return False, "Order already in target status"
+        
+        # Check if order is in a state that allows status updates
+        if order_doc.docstatus == 1:  # Submitted
+            # For submitted orders, only allow certain status transitions
+            allowed_transitions = {
+                "To Deliver and Bill": ["Completed", "Cancelled"],
+                "Completed": ["Cancelled"],
+                "Cancelled": []  # No further transitions from cancelled
+            }
+            current_status = order_doc.status
+            if current_status in allowed_transitions and new_status in allowed_transitions[current_status]:
+                return True, "Valid status transition"
+            else:
+                return False, f"Invalid status transition from {current_status} to {new_status}"
+        
+        elif order_doc.docstatus == 0:  # Draft
+            # Draft orders can be updated to any status
+            return True, "Draft order can be updated"
+        
+        else:  # Cancelled
+            return False, "Cancelled order cannot be updated"
+    
     def get_erpnext_status(self, wc_status):
         """Map WooCommerce status to ERPNext status"""
         status_mapping = {
@@ -129,13 +240,8 @@ class WooCommerceSync:
         try:
             WooCommerceLogger.log("Order", "Info", f"Starting order sync for WooCommerce order {wc_order.get('id')}")
             
-            # Validate required order data
-            if not wc_order.get("billing", {}).get("email"):
-                raise ValueError("Customer email is required")
-            if not wc_order.get("line_items"):
-                raise ValueError("Order has no items")
-
-            WooCommerceLogger.log("Order", "Info", "Validated email and line items", details={"order_id": wc_order.get("id")})
+            # Order validation is now done in validate_woocommerce_order method
+            WooCommerceLogger.log("Order", "Info", "Order validation passed", details={"order_id": wc_order.get("id")})
 
             # Check if order already exists
             existing_order = frappe.get_all(
@@ -146,17 +252,44 @@ class WooCommerceSync:
 
             if existing_order:
                 WooCommerceLogger.log("Order", "Info", f"Order {wc_order['id']} already exists. Checking for status update.")
-                # Update existing order status if needed
-                existing_order_doc = frappe.get_doc("Sales Order", existing_order[0]["name"])
-                new_status = self.get_erpnext_status(wc_order["status"])
+                try:
+                    # Update existing order status if needed
+                    existing_order_doc = frappe.get_doc("Sales Order", existing_order[0]["name"])
+                    new_status = self.get_erpnext_status(wc_order["status"])
 
-                if existing_order_doc.status != new_status:
-                    WooCommerceLogger.log("Order", "Info", f"Updating order {existing_order_doc.name} status from {existing_order_doc.status} to {new_status}")
-                    existing_order_doc.status = new_status
-                    existing_order_doc.save()
-                    frappe.db.commit()
-                    WooCommerceLogger.log("Order", "Success", f"Updated existing order status", details={"order_id": wc_order["id"]})
-                return
+                    # Check if order can be updated
+                    can_update, reason = self.can_update_order_status(existing_order_doc, new_status)
+                    
+                    if can_update:
+                        WooCommerceLogger.log("Order", "Info", f"Updating order {existing_order_doc.name} status from {existing_order_doc.status} to {new_status}")
+                        success, message = self.update_order_with_retry(existing_order_doc, new_status)
+                        
+                        if success:
+                            WooCommerceLogger.log("Order", "Success", f"Updated existing order status: {message}", details={"order_id": wc_order["id"], "old_status": existing_order_doc.status, "new_status": new_status})
+                        else:
+                            raise ValueError(f"Failed to update order status: {message}")
+                    else:
+                        WooCommerceLogger.log("Order", "Info", f"Order {wc_order['id']} cannot be updated: {reason}", details={
+                            "order_id": wc_order["id"], 
+                            "current_status": existing_order_doc.status,
+                            "target_status": new_status,
+                            "docstatus": existing_order_doc.docstatus,
+                            "reason": reason
+                        })
+                    
+                    # Log successful handling of existing order (whether updated or not)
+                    WooCommerceLogger.log_order_creation(wc_order["id"], True, reference_name=existing_order_doc.name)
+                    return
+                    
+                except Exception as e:
+                    error_msg = f"Failed to update existing order {wc_order['id']}: {str(e)}"
+                    WooCommerceLogger.log("Order", "Info", error_msg, details={
+                        "order_id": wc_order["id"],
+                        "existing_order_name": existing_order[0]["name"],
+                        "error": str(e)
+                    })
+                    # Don't return here - let the error propagate to be handled by the main sync loop
+                    raise ValueError(error_msg)
 
             # Get or create customer
             WooCommerceLogger.log("Order", "Info", f"Getting or creating customer for order {wc_order['id']}")
