@@ -154,7 +154,8 @@ class WooCommerceSync:
                     errors.append(f"Line item {i+1} has no name")
                 if not item.get("quantity") or float(item.get("quantity", 0)) <= 0:
                     errors.append(f"Line item {i+1} has invalid quantity")
-                if not item.get("price"):
+                price = item.get("price")
+                if price is None or price == "" or (isinstance(price, (int, float)) and str(price).lower() == "nan"):
                     errors.append(f"Line item {i+1} has no price")
         
         # Check for valid status
