@@ -3,13 +3,13 @@ from frappe import _
 from frappe.utils import now_datetime
 from woocommerce import API
 import json
-from woocommerce_sync.config.woocommerce_config import WOOCOMMERCE_CONFIG, SYNC_CONFIG
+from woocommerce_sync.config.woocommerce_config import get_woocommerce_config, get_sync_config, update_sync_status
 from woocommerce_sync.utils.logger import WooCommerceLogger
 
 class WooCommerceSync:
     def __init__(self):
-        self.config = WOOCOMMERCE_CONFIG
-        self.sync_config = SYNC_CONFIG
+        self.config = get_woocommerce_config()
+        self.sync_config = get_sync_config()
         self.validate_config()
         self.wcapi = self.get_wcapi()
 
@@ -20,7 +20,7 @@ class WooCommerceSync:
                 "WooCommerce configuration is incomplete",
                 details={"config": self.config}
             )
-            frappe.throw(_("WooCommerce configuration is incomplete. Please check woocommerce_config.py"))
+            frappe.throw(_("WooCommerce configuration is incomplete. Please check WooCommerce Settings doctype."))
 
     def get_wcapi(self):
         """Initialize WooCommerce API client"""
@@ -591,26 +591,31 @@ class WooCommerceSync:
         return frappe.get_value("Account", {"is_default": 1, "account_type": "Tax"}, "name")
 
     def save_sync_status(self):
-        """Save sync status to configuration"""
+        """Save sync status to ERPNext WooCommerce Settings doctype"""
         try:
-            with open("woocommerce_config.py", "w") as f:
-                f.write(f"""
-# WooCommerce API Configuration
-WOOCOMMERCE_CONFIG = {WOOCOMMERCE_CONFIG}
-
-# Sync Configuration
-SYNC_CONFIG = {SYNC_CONFIG}
-                """)
+            update_sync_status(
+                last_sync=self.sync_config.get("last_sync"),
+                sync_status=self.sync_config.get("sync_status")
+            )
         except Exception as e:
             WooCommerceLogger.log_error("Failed to save sync status", e)
 
     def get_sync_status(self):
-        """Get current sync status"""
-        return {
-            "last_sync": self.sync_config.get("last_sync"),
-            "sync_status": self.sync_config.get("sync_status"),
-            "enable_sync": self.sync_config.get("enable_sync", False)
-        }
+        """Get current sync status from ERPNext WooCommerce Settings doctype"""
+        try:
+            sync_config = get_sync_config()
+            return {
+                "last_sync": sync_config.get("last_sync"),
+                "sync_status": sync_config.get("sync_status"),
+                "enable_sync": sync_config.get("enable_sync", False)
+            }
+        except Exception as e:
+            WooCommerceLogger.log_error("Failed to get sync status", e)
+            return {
+                "last_sync": None,
+                "sync_status": "Error",
+                "enable_sync": False
+            }
 
     def sync_invoice_to_woocommerce(self, invoice_name):
         """Sync ERPNext Sales Invoice to WooCommerce"""

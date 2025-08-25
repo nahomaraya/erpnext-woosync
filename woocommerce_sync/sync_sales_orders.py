@@ -1,7 +1,7 @@
 import frappe
 from frappe import _
 from woocommerce_sync.sales_order_to_woocommerce import WooCommerceSync
-from woocommerce_sync.config.woocommerce_config import WOOCOMMERCE_CONFIG, SYNC_CONFIG
+from woocommerce_sync.config.woocommerce_config import get_woocommerce_config, get_sync_config, update_sync_status
 
 @frappe.whitelist()
 def sync_orders():
@@ -25,20 +25,30 @@ def get_sync_status():
 @frappe.whitelist()
 def update_config(config_data):
     try:
-        # Update WooCommerce configuration
-        WOOCOMMERCE_CONFIG.update(config_data.get("woocommerce", {}))
-        SYNC_CONFIG.update(config_data.get("sync", {}))
+        # Get the WooCommerce Settings document
+        settings = frappe.get_doc("WooCommerce Settings", "WooCommerce Settings")
         
-        # Save configuration to file
-        with open("woocommerce_config.py", "w") as f:
-            f.write(f"""
-# WooCommerce API Configuration
-WOOCOMMERCE_CONFIG = {WOOCOMMERCE_CONFIG}
-
-# Sync Configuration
-SYNC_CONFIG = {SYNC_CONFIG}
-            """)
+        # Update WooCommerce configuration
+        woocommerce_config = config_data.get("woocommerce", {})
+        if woocommerce_config.get("url"):
+            settings.woocommerce_url = woocommerce_config["url"]
+        if woocommerce_config.get("consumer_key"):
+            settings.consumer_key = woocommerce_config["consumer_key"]
+        if woocommerce_config.get("consumer_secret"):
+            settings.consumer_secret = woocommerce_config["consumer_secret"]
+        
+        # Update sync configuration
+        sync_config = config_data.get("sync", {})
+        if "enable_sync" in sync_config:
+            settings.enable_sync = sync_config["enable_sync"]
+        if sync_config.get("sync_interval"):
+            settings.sync_interval = sync_config["sync_interval"].title()
+        
+        # Save the document
+        settings.save()
+        frappe.db.commit()
         
         return {"status": "success", "message": "Configuration updated successfully"}
     except Exception as e:
+        frappe.log_error(f"Error updating WooCommerce configuration: {str(e)}", "WooCommerce Config Error")
         return {"status": "Failed", "message": str(e)} 
