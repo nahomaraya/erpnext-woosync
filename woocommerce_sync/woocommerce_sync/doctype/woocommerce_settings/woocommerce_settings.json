@@ -31,7 +31,7 @@
   },
   {
    "fieldname": "consumer_secret",
-   "fieldtype": "Password",
+   "fieldtype": "Data",
    "label": "Consumer Secret",
    "reqd": 1
   },
