@@ -26,13 +26,16 @@ import frappe
 def get_woocommerce_config():
     """Get WooCommerce configuration from ERPNext WooCommerce Settings doctype"""
     try:
-        # Check if WooCommerce Settings document exists
-        if not frappe.db.exists("WooCommerce Settings", "WooCommerce Settings"):
+        # Get all WooCommerce Settings documents
+        settings_list = frappe.get_all("WooCommerce Settings", fields=["name"])
+        
+        if not settings_list:
             # Create default WooCommerce Settings document
             create_default_woocommerce_settings()
+            settings_list = frappe.get_all("WooCommerce Settings", fields=["name"])
         
-        # Get the WooCommerce Settings document
-        settings = frappe.get_doc("WooCommerce Settings", "WooCommerce Settings")
+        # Get the first WooCommerce Settings document
+        settings = frappe.get_doc("WooCommerce Settings", settings_list[0]["name"])
         
         return {
             "url": settings.woocommerce_url,
@@ -57,13 +60,16 @@ def get_woocommerce_config():
 def get_sync_config():
     """Get sync configuration from ERPNext WooCommerce Settings doctype"""
     try:
-        # Check if WooCommerce Settings document exists
-        if not frappe.db.exists("WooCommerce Settings", "WooCommerce Settings"):
+        # Get all WooCommerce Settings documents
+        settings_list = frappe.get_all("WooCommerce Settings", fields=["name"])
+        
+        if not settings_list:
             # Create default WooCommerce Settings document
             create_default_woocommerce_settings()
+            settings_list = frappe.get_all("WooCommerce Settings", fields=["name"])
         
-        # Get the WooCommerce Settings document
-        settings = frappe.get_doc("WooCommerce Settings", "WooCommerce Settings")
+        # Get the first WooCommerce Settings document
+        settings = frappe.get_doc("WooCommerce Settings", settings_list[0]["name"])
         
         return {
             "enable_sync": settings.enable_sync,
@@ -84,10 +90,12 @@ def get_sync_config():
 def create_default_woocommerce_settings():
     """Create default WooCommerce Settings document if it doesn't exist"""
     try:
-        if not frappe.db.exists("WooCommerce Settings", "WooCommerce Settings"):
+        # Check if any WooCommerce Settings document exists
+        settings_list = frappe.get_all("WooCommerce Settings", fields=["name"])
+        
+        if not settings_list:
             settings = frappe.get_doc({
                 "doctype": "WooCommerce Settings",
-                "name": "WooCommerce Settings",
                 "woocommerce_url": "",
                 "consumer_key": "",
                 "consumer_secret": "",
@@ -105,11 +113,15 @@ def create_default_woocommerce_settings():
 def update_sync_status(last_sync=None, sync_status=None):
     """Update sync status in ERPNext WooCommerce Settings doctype"""
     try:
-        # Check if WooCommerce Settings document exists
-        if not frappe.db.exists("WooCommerce Settings", "WooCommerce Settings"):
-            create_default_woocommerce_settings()
+        # Get all WooCommerce Settings documents
+        settings_list = frappe.get_all("WooCommerce Settings", fields=["name"])
         
-        settings = frappe.get_doc("WooCommerce Settings", "WooCommerce Settings")
+        if not settings_list:
+            create_default_woocommerce_settings()
+            settings_list = frappe.get_all("WooCommerce Settings", fields=["name"])
+        
+        # Get the first WooCommerce Settings document
+        settings = frappe.get_doc("WooCommerce Settings", settings_list[0]["name"])
         if last_sync is not None:
             settings.last_sync = last_sync
         if sync_status is not None:

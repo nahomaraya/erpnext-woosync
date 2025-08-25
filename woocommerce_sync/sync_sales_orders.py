@@ -25,8 +25,17 @@ def get_sync_status():
 @frappe.whitelist()
 def update_config(config_data):
     try:
-        # Get the WooCommerce Settings document
-        settings = frappe.get_doc("WooCommerce Settings", "WooCommerce Settings")
+        # Get all WooCommerce Settings documents
+        settings_list = frappe.get_all("WooCommerce Settings", fields=["name"])
+        
+        if not settings_list:
+            # Create default WooCommerce Settings document
+            from woocommerce_sync.config.woocommerce_config import create_default_woocommerce_settings
+            create_default_woocommerce_settings()
+            settings_list = frappe.get_all("WooCommerce Settings", fields=["name"])
+        
+        # Get the first WooCommerce Settings document
+        settings = frappe.get_doc("WooCommerce Settings", settings_list[0]["name"])
         
         # Update WooCommerce configuration
         woocommerce_config = config_data.get("woocommerce", {})
