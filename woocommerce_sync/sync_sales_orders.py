@@ -1,7 +1,7 @@
 import frappe
 from frappe import _
 from woocommerce_sync.sales_order_to_woocommerce import WooCommerceSync
-from woocommerce_sync.config.woocommerce_config import get_woocommerce_config, get_sync_config, update_sync_status, test_woocommerce_connection
+from woocommerce_sync.config.woocommerce_config import get_woocommerce_config, get_sync_config, update_sync_status
 
 @frappe.whitelist()
 def sync_orders():
@@ -62,12 +62,12 @@ def update_config(config_data):
         frappe.log_error(f"Error updating WooCommerce configuration: {str(e)}", "WooCommerce Config Error")
         return {"status": "Failed", "message": str(e)}
 
-@frappe.whitelist()
-def test_connection():
-    """Test WooCommerce API connection"""
-    try:
-        result = test_woocommerce_connection()
-        return result
-    except Exception as e:
-        frappe.log_error(f"Error in test_connection: {str(e)}", "WooCommerce Sync Error")
-        return {"status": "Failed", "message": str(e)} 
+# @frappe.whitelist()
+# def test_connection():
+#     """Test WooCommerce API connection"""
+#     try:
+#         result = test_woocommerce_connection()
+#         return result
+#     except Exception as e:
+#         frappe.log_error(f"Error in test_connection: {str(e)}", "WooCommerce Sync Error")
+#         return {"status": "Failed", "message": str(e)} 

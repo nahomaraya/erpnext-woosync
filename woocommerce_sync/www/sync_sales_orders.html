@@ -48,7 +48,6 @@
                         <p>Last Sync: <span id="last-sync">-</span></p>
                         <p>Status: <span id="status">-</span></p>
                     </div>
-                    <button class="btn btn-info mt-3" id="test-connection-button">Test WooCommerce Connection</button>
                     <div id="connection-test-result" class="mt-3"></div>
                 </div>
             </div>
@@ -87,10 +86,7 @@
             syncOrders();
         });
 
-        // Add click handler for test connection button
-        $('#test-connection-button').click(function() {
-            testConnection();
-        });
+      
 
         // Handle configuration form submission
         $('#config-form').submit(function(e) {
