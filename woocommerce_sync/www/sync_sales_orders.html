@@ -48,6 +48,8 @@
                         <p>Last Sync: <span id="last-sync">-</span></p>
                         <p>Status: <span id="status">-</span></p>
                     </div>
+                    <button class="btn btn-info mt-3" id="test-connection-button">Test WooCommerce Connection</button>
+                    <div id="connection-test-result" class="mt-3"></div>
                 </div>
             </div>
 
@@ -83,6 +85,11 @@
         // Add click handler for sync button
         $('#sync-button').click(function() {
             syncOrders();
+        });
+
+        // Add click handler for test connection button
+        $('#test-connection-button').click(function() {
+            testConnection();
         });
 
         // Handle configuration form submission
@@ -152,6 +159,26 @@
                         indicator: 'red'
                     });
                 }
+            }
+        });
+    }
+
+    function testConnection() {
+        $('#test-connection-button').prop('disabled', true);
+        $('#connection-test-result').html('<div class="alert alert-info">Testing WooCommerce connection...</div>');
+
+        frappe.call({
+            method: 'woocommerce_sync.sync_sales_orders.test_connection',
+            callback: function(response) {
+                if (response.message.status === 'success') {
+                    $('#connection-test-result').html('<div class="alert alert-success">' + response.message.message + '</div>');
+                } else {
+                    $('#connection-test-result').html('<div class="alert alert-danger">' + response.message.message + '</div>');
+                    if (response.message.details) {
+                        $('#connection-test-result').append('<div class="mt-2"><small><strong>Details:</strong><br>' + JSON.stringify(response.message.details, null, 2) + '</small></div>');
+                    }
+                }
+                $('#test-connection-button').prop('disabled', false);
             }
         });
     }

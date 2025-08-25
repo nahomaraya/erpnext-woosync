@@ -7,7 +7,7 @@ def get_list_context(context):
         "get_list": get_woocommerce_sync_logs,
         "row_template": "woocommerce_sync/doctype/woocommerce_sync_log/templates/woocommerce_sync_log_row.html",
         "filters": {
-            "status": ["in", ["Success", "Failed", "Warning", "Info"]]
+            "status": ["in", ["Success", "Failed", "Info"]]
         }
     })
 
