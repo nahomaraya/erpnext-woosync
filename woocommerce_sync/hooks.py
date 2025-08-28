@@ -200,3 +200,24 @@ override_whitelisted_methods = {
 # auth_hooks = [
 #	"woocommerce_sync.auth.validate"
 # ]
+
+desk_page = {
+    "My Page": {
+        "label": "Woocommerce Sync Data",
+        "icon": "octicon octicon-globe",
+        "type": "link",
+        "link": "/sync_sales_orders",
+        "module": "Woocommerce Sync"
+    }
+}
+
+app_include_links = {
+    "Woocommerce Sync": [
+        {
+            "label": "Woocommerce Sync Data",
+            "icon": "octicon octicon-globe",
+            "type": "link",
+            "link": "/sync_sales_orders"
+        }
+    ]
+}
