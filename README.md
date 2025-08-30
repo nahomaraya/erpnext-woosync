@@ -18,7 +18,7 @@ The app operates by listening for new sales orders in WooCommerce and then creat
 ## Installation
 Clone the app into your Frappe bench's apps directory:
 ```
-bench get-app [https://github.com/nahomaraya/woocommerce-sync.git](https://github.com/nahomaraya/woocommerce-sync.git)
+bench get-app https://github.com/nahomaraya/woocommerce-sync.git
 ```
 Install the app on your Frappe site:
 ```
