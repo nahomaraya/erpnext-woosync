@@ -37,14 +37,5 @@ WooCommerce Settings: To store API keys and configuration.
 
 WooCommerce Sync Log: To log synchronization activities and errors.
 
-Sales Invoice (custom fields): Custom fields may be added to this standard DocType to support synchronization.
-
-Hooks: The hooks.py file is used to define background jobs and other events.
-
-Controllers: The sync_sales_orders.py, sync_invoice.py, and sales_order_to_woocommerce.py files contain the core business logic.
-
-## Contributing
-We welcome contributions! If you would like to contribute, please fork the repository and submit a pull request.
-
 ## License
 This project is licensed under the MIT License.
