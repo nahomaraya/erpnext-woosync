@@ -8,21 +8,21 @@ def execute():
             "fieldname": "woocommerce_order_id",
             "fieldtype": "Data",
             "label": "Woocommerce Order Id",
-            "insert_after": "title",
+            "insert_after": "owner",
         },
         {
             "dt": "Customer",
             "fieldname": "woocommerce_customer_id",
             "fieldtype": "Data",
             "label": "Woocommerce Customer Id",
-            "insert_after": "title",
+            "insert_after": "customer_name",
         },
         {
             "dt": "Item",
             "fieldname": "woocommerce_product_id",
             "fieldtype": "Data",
             "label": "Woocommerce Product Id",
-            "insert_after": "title",
+            "insert_after": "item_name",
         }
     ]
 
