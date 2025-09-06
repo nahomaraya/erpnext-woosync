@@ -1,7 +1,7 @@
 import frappe
 from frappe import _
 from woocommerce_sync.sales_order_to_woocommerce import WooCommerceSync
-from woocommerce_sync.config.woocommerce_config import get_woocommerce_config, get_sync_config, update_sync_status
+from woocommerce_sync.woocommerce_config import get_woocommerce_config, get_sync_config, update_sync_status
 
 @frappe.whitelist()
 def sync_orders():
@@ -30,7 +30,7 @@ def update_config(config_data):
         
         if not settings_list:
             # Create default WooCommerce Settings document
-            from woocommerce_sync.config.woocommerce_config import create_default_woocommerce_settings
+            from woocommerce_sync.woocommerce_config import create_default_woocommerce_settings
             create_default_woocommerce_settings()
             settings_list = frappe.get_all("WooCommerce Settings", fields=["name"])
         
