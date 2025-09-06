@@ -8,23 +8,15 @@ def get_woocommerce_config():
     """Get WooCommerce configuration from ERPNext WooCommerce Settings doctype"""
     try:
         # Get all WooCommerce Settings documents
-        settings_list = frappe.get_all("WooCommerce Settings", fields=["name"])
-        
-        if not settings_list:
-            # Create default WooCommerce Settings document
-            create_default_woocommerce_settings()
-            settings_list = frappe.get_all("WooCommerce Settings", fields=["name"])
-        
-        # Get the first WooCommerce Settings document
-        settings = frappe.get_doc("WooCommerce Settings", settings_list[0]["name"])
-        
+        config = frappe.db.get_singles_dict("woocommerce_sync_settings")
+
         return {
-            "url": settings.woocommerce_url,
-            "consumer_key": settings.consumer_key,
-            "consumer_secret": settings.consumer_secret,
-            "version": "wc/v3",  # WooCommerce API version
-            "verify_ssl": True,  # SSL verification
-            "timeout": 30,  # API request timeout in seconds
+        "url": config.get("woocommerce_url"),
+        "consumer_key": config.get("consumer_key"),
+        "consumer_secret": config.get("consumer_secret"),
+        "version": "wc/v3",
+        "verify_ssl": True,
+        "timeout": 30,
         }
     except Exception as e:
         frappe.log_error(f"Error getting WooCommerce configuration: {str(e)}", "WooCommerce Config Error")

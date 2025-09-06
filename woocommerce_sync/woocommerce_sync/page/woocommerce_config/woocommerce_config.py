@@ -1,29 +1,36 @@
 import frappe
 from woocommerce import API
 
-CONFIG_KEY = "woocommerce_sync_settings"
+# This must be a Single DocType you create (e.g., "WooCommerce Sync Settings")
+CONFIG_KEY = "WooCommerce Settings"
+
 
 def _get_config_doc():
-    """Use Frappe's single-value store (tabSingles)"""
+    """Use Frappe's single-value store (tabSingles)."""
     return frappe.db.get_singles_dict(CONFIG_KEY)
+
 
 @frappe.whitelist()
 def get_config():
+    """Fetch current WooCommerce configuration"""
     return _get_config_doc()
+
 
 @frappe.whitelist()
 def save_config(config):
+    """Save WooCommerce config into Singles"""
     if isinstance(config, str):
-        import json
         config = frappe.parse_json(config)
 
     for key, value in config.items():
-        frappe.db.set_value("Singles", {"doctype": CONFIG_KEY, "field": key}, "value", value, update_modified=False)
+        frappe.db.set_single_value(CONFIG_KEY, key, value)
 
-    return "Configuration saved successfully!"
+    return "✅ Configuration saved successfully!"
+
 
 @frappe.whitelist()
 def test_connection():
+    """Test connection to WooCommerce"""
     cfg = _get_config_doc()
     try:
         wcapi = API(
@@ -39,10 +46,9 @@ def test_connection():
     except Exception as e:
         return f"❌ Error: {str(e)}"
 
+
 @frappe.whitelist()
 def sync_now():
-    cfg = _get_config_doc()
-    # Example stub
-    cfg["sync_status"] = "Running"
+    """Start a manual sync"""
     frappe.db.set_single_value(CONFIG_KEY, "sync_status", "Running")
     return "🔄 Sync started..."
