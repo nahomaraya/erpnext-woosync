@@ -545,16 +545,16 @@ class WooCommerceSync:
                 )
                 return existing_item[0]["name"]
 
-            default_item_group = frappe.db.get_single_value("Stock Settings", "default_item_group") or "All Item Groups"
-            default_uom = frappe.db.get_single_value("Stock Settings", "stock_uom") or "Nos"
+            # default_item_group = frappe.db.get_single_value("Stock Settings", "default_item_group") or "All Item Groups"
+            # default_uom = frappe.db.get_single_value("Stock Settings", "stock_uom") or "Nos"
             # Create new item
             item = frappe.get_doc({
                 "doctype": "Item",
                 "item_code": item_code,
                 "item_name": wc_item["name"][:140],
                 "description": wc_item.get("description", "")[:1000],
-                "item_group": default_item_group,
-                "stock_uom": default_uom,
+                "item_group": "All Item Groups", 
+                "stock_uom": "Nos",
                 "is_stock_item": 1,
                 "include_item_in_manufacturing": 0,
                 "is_sales_item": 1,
