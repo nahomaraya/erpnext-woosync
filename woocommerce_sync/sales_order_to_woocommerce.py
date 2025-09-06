@@ -4,7 +4,7 @@ from frappe.utils import now_datetime
 from woocommerce import API
 import json
 from woocommerce_sync.woocommerce_config import get_woocommerce_config, get_sync_config, update_sync_status
-from woocommerce_sync.utils.logger import WooCommerceLogger
+from woocommerce_sync.logger import WooCommerceLogger
 
 class WooCommerceSync:
     def __init__(self):
