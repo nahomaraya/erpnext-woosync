@@ -1,0 +1,8 @@
+{
+    "doctype": "Page",
+    "name": "woocommerce-config",
+    "module": "Woocommerce Sync",
+    "title": "WooCommerce Config",
+    "standard": 1
+  }
+  

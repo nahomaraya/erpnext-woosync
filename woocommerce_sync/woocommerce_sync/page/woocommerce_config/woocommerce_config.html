@@ -1,0 +1,37 @@
+<div class="form-container">
+    <div class="form-group">
+        <label>WooCommerce URL</label>
+        <input type="text" class="form-control" id="woocommerce_url">
+    </div>
+    <div class="form-group">
+        <label>Consumer Key</label>
+        <input type="text" class="form-control" id="consumer_key">
+    </div>
+    <div class="form-group">
+        <label>Consumer Secret</label>
+        <input type="password" class="form-control" id="consumer_secret">
+    </div>
+    <div class="form-group">
+        <label>Enable Sync</label>
+        <input type="checkbox" id="enable_sync">
+    </div>
+    <div class="form-group">
+        <label>Sync Interval</label>
+        <select id="sync_interval" class="form-control">
+            <option value="Daily">Daily</option>
+            <option value="Weekly">Weekly</option>
+            <option value="Monthly">Monthly</option>
+        </select>
+    </div>
+
+    <hr>
+
+    <p><b>Last Sync:</b> <span id="last_sync">-</span></p>
+    <p><b>Status:</b> <span id="sync_status">-</span></p>
+
+    <div class="mt-3">
+        <button class="btn btn-primary" id="save-config">Save Configuration</button>
+        <!-- <button class="btn btn-secondary" id="test-connection">Test Connection</button>
+        <button class="btn btn-success" id="sync-now">Sync Now</button> -->
+    </div>
+</div>
