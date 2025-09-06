@@ -2,20 +2,20 @@
 
 The woocommerce_sync application is a custom Frappe app designed to synchronize data between a Frappe ERPNext instance and a WooCommerce store. This app streamlines business processes by ensuring that sales orders, invoices, and other critical data are consistent across both platforms.
 
-## Features
-- Sales Order Synchronization: Automatically syncs sales orders from WooCommerce to Frappe.
+## Current Features
+- Syncs sales orders, customers, and products from WooCommerce to ERPNEXT.
 
-- Invoice Generation: Creates corresponding invoices in Frappe based on synchronized sales orders.
+- Manual or scheduled synchronization
 
-- Real-time Updates: Maintains data consistency through scheduled background jobs.
-
-- User-friendly Interface: Provides a simple web interface to manage and debug synchronization processes.
 
 ## How It Works
 
 The app operates by listening for new sales orders in WooCommerce and then creating them as sales orders and invoices within your Frappe instance. This process is managed by a set of Python controllers and scheduled jobs.
 
+Tested on ERPNEXT 14/15 and Woocommerce wc/v3
+
 ## Installation
+
 Clone the app into your Frappe bench's apps directory:
 ```
 bench get-app https://github.com/nahomaraya/woocommerce-sync.git
