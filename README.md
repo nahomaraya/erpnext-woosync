@@ -1,6 +1,6 @@
-# WooCommerce Sync App
+# ERPNEXT WooCommerce Sync App(erpnext-woosync)
 
-The woocommerce_sync application is a custom Frappe app designed to synchronize data between a Frappe ERPNext instance and a WooCommerce store. This app streamlines business processes by ensuring that sales orders, invoices, and other critical data are consistent across both platforms.
+The application is a custom Frappe app designed to synchronize data between a Frappe ERPNext instance and a WooCommerce store. This app streamlines business processes by ensuring that sales orders, invoices, and other critical data are consistent across both platforms.
 
 ## Current Features
 - Syncs sales orders, customers, and products from WooCommerce to ERPNEXT.
