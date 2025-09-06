@@ -1,26 +1,30 @@
 """
 WooCommerce Configuration
-This file contains functions to get WooCommerce API configuration from ERPNext doctype.
+Centralized config access for WooCommerce integration.
+Uses the Single DocType: WooCommerce Settings
 """
+
 import frappe
 
-def get_woocommerce_config():
-    """Get WooCommerce configuration from ERPNext WooCommerce Settings doctype"""
-    try:
-        # Get all WooCommerce Settings documents
-        config = frappe.db.get_singles_dict("woocommerce_sync_settings")
 
+# ----------------------------
+# Core Config Access
+# ----------------------------
+
+def get_woocommerce_config():
+    """Return WooCommerce API config from WooCommerce Settings (Single Doctype)."""
+    try:
+        config = frappe.db.get_singles_dict("WooCommerce Settings")
         return {
-        "url": config.get("woocommerce_url"),
-        "consumer_key": config.get("consumer_key"),
-        "consumer_secret": config.get("consumer_secret"),
-        "version": "wc/v3",
-        "verify_ssl": True,
-        "timeout": 30,
+            "url": config.get("woocommerce_url") or "",
+            "consumer_key": config.get("consumer_key") or "",
+            "consumer_secret": config.get("consumer_secret") or "",
+            "version": "wc/v3",
+            "verify_ssl": True,
+            "timeout": 30,
         }
     except Exception as e:
         frappe.log_error(f"Error getting WooCommerce configuration: {str(e)}", "WooCommerce Config Error")
-        # Return default/fallback config
         return {
             "url": "",
             "consumer_key": "",
@@ -30,83 +34,47 @@ def get_woocommerce_config():
             "timeout": 30,
         }
 
+
 def get_sync_config():
-    """Get sync configuration from ERPNext WooCommerce Settings doctype"""
+    """Return sync-specific config values from WooCommerce Settings (Single Doctype)."""
     try:
-        # Get all WooCommerce Settings documents
-        settings_list = frappe.get_all("WooCommerce Settings", fields=["name"])
-        
-        if not settings_list:
-            # Create default WooCommerce Settings document
-            create_default_woocommerce_settings()
-            settings_list = frappe.get_all("WooCommerce Settings", fields=["name"])
-        
-        # Get the first WooCommerce Settings document
-        settings = frappe.get_doc("WooCommerce Settings", settings_list[0]["name"])
-        
+        config = frappe.db.get_singles_dict("WooCommerce Settings")
         return {
-            "enable_sync": settings.enable_sync,
-            "sync_interval": settings.sync_interval.lower() if settings.sync_interval else "daily",
-            "sync_status": settings.sync_status or "",
-            "last_sync": settings.last_sync
+            "enable_sync": bool(config.get("enable_sync")),
+            "sync_interval": (config.get("sync_interval") or "Daily").lower(),
+            "sync_status": config.get("sync_status") or "",
+            "last_sync": config.get("last_sync"),
         }
     except Exception as e:
         frappe.log_error(f"Error getting sync configuration: {str(e)}", "WooCommerce Config Error")
-        # Return default/fallback config
         return {
             "enable_sync": False,
             "sync_interval": "daily",
             "sync_status": "",
-            "last_sync": None
+            "last_sync": None,
         }
 
-def create_default_woocommerce_settings():
-    """Create default WooCommerce Settings document if it doesn't exist"""
-    try:
-        # Check if any WooCommerce Settings document exists
-        settings_list = frappe.get_all("WooCommerce Settings", fields=["name"])
-        
-        if not settings_list:
-            settings = frappe.get_doc({
-                "doctype": "WooCommerce Settings",
-                "woocommerce_url": "",
-                "consumer_key": "",
-                "consumer_secret": "",
-                "enable_sync": False,
-                "sync_interval": "Daily",
-                "sync_status": "",
-                "last_sync": None
-            })
-            settings.insert(ignore_permissions=True)
-            frappe.db.commit()
-            frappe.msgprint("Default WooCommerce Settings document created. Please configure your WooCommerce credentials.")
-    except Exception as e:
-        frappe.log_error(f"Error creating default WooCommerce Settings: {str(e)}", "WooCommerce Config Error")
 
 def update_sync_status(last_sync=None, sync_status=None):
-    """Update sync status in ERPNext WooCommerce Settings doctype"""
+    """Update last_sync and/or sync_status in WooCommerce Settings."""
     try:
-        # Get all WooCommerce Settings documents
-        settings_list = frappe.get_all("WooCommerce Settings", fields=["name"])
-        
-        if not settings_list:
-            create_default_woocommerce_settings()
-            settings_list = frappe.get_all("WooCommerce Settings", fields=["name"])
-        
-        # Get the first WooCommerce Settings document
-        settings = frappe.get_doc("WooCommerce Settings", settings_list[0]["name"])
         if last_sync is not None:
-            settings.last_sync = last_sync
+            frappe.db.set_single_value("WooCommerce Settings", "last_sync", last_sync)
         if sync_status is not None:
-            settings.sync_status = sync_status
-        settings.save()
-        frappe.db.commit()
+            frappe.db.set_single_value("WooCommerce Settings", "sync_status", sync_status)
     except Exception as e:
         frappe.log_error(f"Error updating sync status: {str(e)}", "WooCommerce Config Error")
 
-# For backward compatibility, provide the old variable names as functions
+
+# ----------------------------
+# Backward Compatibility Aliases
+# ----------------------------
+
 def WOOCOMMERCE_CONFIG():
+    """Legacy alias for get_woocommerce_config"""
     return get_woocommerce_config()
 
+
 def SYNC_CONFIG():
-    return get_sync_config() 
+    """Legacy alias for get_sync_config"""
+    return get_sync_config()
