@@ -38,4 +38,4 @@ WooCommerce Settings: To store API keys and configuration.
 WooCommerce Sync Log: To log synchronization activities and errors.
 
 ## License
-This project is licensed under the MIT License.
+MIT
