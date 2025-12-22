@@ -1,20 +1,68 @@
+"""
+WooCommerce Sync - Logging Module
+==================================
+
+This module provides centralized logging functionality for all WooCommerce
+synchronization operations. It creates structured log entries in the
+WooCommerce Sync Log doctype for audit trail and debugging purposes.
+"""
+
 import frappe
 from frappe import _
 from frappe.utils import now_datetime
 import traceback
 import json
 
+
 class WooCommerceLogger:
+    """
+    Centralized logging class for WooCommerce synchronization operations.
+    
+    This class provides methods to log various types of operations:
+    - Sync start/end events
+    - Order creation/updates
+    - Customer creation
+    - Item creation
+    - General errors and information
+    
+    All logs are stored in the WooCommerce Sync Log doctype for easy tracking
+    and troubleshooting.
+    """
     @staticmethod
     def truncate_message(message, max_length=140):
-        """Truncate message to max_length characters"""
+        """
+        Truncate a message to prevent database field length errors.
+        
+        Args:
+            message (str): Message to truncate
+            max_length (int): Maximum allowed length (default: 140)
+        
+        Returns:
+            str: Truncated message with "..." suffix if needed
+        """
         if len(message) > max_length:
             return message[:max_length-3] + "..."
         return message
 
     @staticmethod
     def log(log_type, status, message, details=None, reference_doctype=None, reference_name=None, error_traceback=None, woocommerce_order_id=None):
-        """Create a log entry in WooCommerce Sync Log"""
+        """
+        Create a log entry in the WooCommerce Sync Log doctype.
+        
+        This is the core logging method that all other log methods use.
+        It handles message truncation and error handling to prevent
+        recursive logging errors.
+        
+        Args:
+            log_type (str): Type of log (e.g., "Sync", "Order", "Customer", "Item")
+            status (str): Status of the operation (e.g., "Success", "Failed", "Info")
+            message (str): Log message (will be truncated if too long)
+            details (dict/str, optional): Additional details to store as JSON
+            reference_doctype (str, optional): Related doctype (e.g., "Sales Order")
+            reference_name (str, optional): Name of the related document
+            error_traceback (str, optional): Error traceback for debugging
+            woocommerce_order_id (str, optional): WooCommerce order ID for reference
+        """
         try:
             # Truncate message to prevent length exceeded errors
             truncated_message = WooCommerceLogger.truncate_message(message)
