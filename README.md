@@ -28,6 +28,8 @@ The WooCommerce Sync app bridges the gap between your WooCommerce online store a
 - **Syncs invoices** back to WooCommerce when created in ERPNext
 - **Maintains data integrity** by preventing duplicate orders
 
+Access the webpage at http://localhost/sync_sales_orders
+
 ## Features
 
 ### Core Functionality
