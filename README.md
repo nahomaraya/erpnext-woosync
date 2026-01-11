@@ -28,6 +28,8 @@ The WooCommerce Sync app bridges the gap between your WooCommerce online store a
 - **Syncs invoices** back to WooCommerce when created in ERPNext
 - **Maintains data integrity** by preventing duplicate orders
 
+Access the webpage at http://localhost/sync_sales_orders
+
 ## Features
 
 ### Core Functionality
@@ -96,68 +98,8 @@ woocommerce_sync/
 
 ### Order Synchronization Flow
 
-```
-┌─────────────────┐
-│  WooCommerce    │
-│     Store       │
-└────────┬────────┘
-         │
-         │ 1. Fetch Orders via API
-         │
-         ▼
-┌─────────────────┐
-│  Validate Order │
-│     Data        │
-└────────┬────────┘
-         │
-         │ 2. Check if Order Exists
-         │    (by woocommerce_order_id)
-         │
-         ▼
-    ┌────────┐
-    │ Exists?│
-    └───┬────┘
-        │
-    ┌───┴────┐
-    │        │
-   Yes      No
-    │        │
-    │        ▼
-    │   ┌─────────────────┐
-    │   │ Create Customer  │
-    │   │ (if needed)      │
-    │   └────────┬─────────┘
-    │            │
-    │            ▼
-    │   ┌─────────────────┐
-    │   │ Create Items    │
-    │   │ (if needed)      │
-    │   └────────┬─────────┘
-    │            │
-    │            ▼
-    │   ┌─────────────────┐
-    │   │ Create Sales    │
-    │   │ Order           │
-    │   └────────┬─────────┘
-    │            │
-    │            ▼
-    │   ┌─────────────────┐
-    │   │ Submit Order    │
-    │   │ (if applicable) │
-    │   └────────┬─────────┘
-    │            │
-    ▼            │
-┌─────────────────┐
-│ Update Status   │
-│ (if changed)    │
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│  Log Operation  │
-│  Update Status  │
-└─────────────────┘
-```
+<img width="564" height="621" alt="Untitled Diagram-Page-1 drawio" src="https://github.com/user-attachments/assets/5023dc8f-0681-463f-adc8-637d5ede4c5a" />
+
 
 ### Detailed Process
 
