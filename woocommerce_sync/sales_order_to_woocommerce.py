@@ -8,6 +8,7 @@ operations between WooCommerce and ERPNext. It manages:
 - Creating/updating Sales Orders in ERPNext
 - Creating/updating Customers and Items
 - Status mapping between WooCommerce and ERPNext
+- Store location sync from WooCommerce checkout
 - Error handling and logging
 """
 
@@ -23,34 +24,14 @@ from woocommerce_sync.logger import WooCommerceLogger
 class WooCommerceSync:
     """
     Main synchronization class for WooCommerce to ERPNext integration.
-    
-    This class handles the complete synchronization workflow:
-    1. Validates WooCommerce API configuration
-    2. Fetches orders from WooCommerce
-    3. Validates order data
-    4. Creates/updates ERPNext Sales Orders
-    5. Creates/updates Customers and Items as needed
-    6. Maps WooCommerce statuses to ERPNext statuses
-    7. Logs all operations for audit trail
     """
     def __init__(self):
-        """
-        Initialize the WooCommerceSync instance.
-        
-        Loads configuration, validates it, and initializes the WooCommerce API client.
-        """
         self.config = get_woocommerce_config()
         self.sync_config = get_sync_config()
         self.validate_config()
         self.wcapi = self.get_wcapi()
 
     def validate_config(self):
-        """
-        Validate that WooCommerce configuration is complete.
-        
-        Checks that URL, consumer key, and consumer secret are all provided.
-        Raises an exception if configuration is incomplete.
-        """
         if not self.config["url"] or not self.config["consumer_key"] or not self.config["consumer_secret"]:
             WooCommerceLogger.log_error(
                 "WooCommerce configuration is incomplete",
@@ -59,12 +40,6 @@ class WooCommerceSync:
             frappe.throw(_("WooCommerce configuration is incomplete. Please check WooCommerce Settings doctype."))
 
     def get_wcapi(self):
-        """
-        Initialize and return the WooCommerce API client.
-        
-        Returns:
-            API: Initialized WooCommerce API client instance
-        """
         return API(
             url=self.config["url"],
             consumer_key=self.config["consumer_key"],
@@ -74,26 +49,56 @@ class WooCommerceSync:
             timeout=self.config["timeout"]
         )
 
+    def get_store_location(self, wc_order):
+        """
+        Extract store location from WooCommerce order meta_data.
+        
+        Looks for the '_selected_store_location' key in the order's meta_data
+        which contains the customer's selected store location from checkout.
+        
+        Args:
+            wc_order (dict): WooCommerce order data dictionary
+        
+        Returns:
+            tuple: (store_location_value, store_location_key) or ("", "") if not found
+        """
+        store_location = ""
+        store_location_key = ""
+        
+        for meta in wc_order.get("meta_data", []):
+            meta_key = meta.get("key", "")
+            
+            # Get the store location value (e.g., "Montreal")
+            if meta_key == "_selected_store_location":
+                store_location = meta.get("value", "")
+                WooCommerceLogger.log(
+                    "Order",
+                    "Info",
+                    f"Found store location: {store_location}",
+                    details={"order_id": wc_order.get("id"), "store_location": store_location}
+                )
+            
+            # Get the store location key (e.g., "store_location_1")
+            if meta_key == "_selected_store_location_key":
+                store_location_key = meta.get("value", "")
+        
+        if not store_location:
+            WooCommerceLogger.log(
+                "Order",
+                "Info",
+                f"No store location found for order {wc_order.get('id')}",
+                details={"order_id": wc_order.get("id")}
+            )
+        
+        return store_location, store_location_key
+
     def sync_from_woocommerce(self):
-        """
-        Main synchronization method: Fetches orders from WooCommerce and creates/updates them in ERPNext.
-        
-        Process flow:
-        1. Checks if sync is enabled
-        2. Fetches all orders from WooCommerce (all statuses)
-        3. Validates each order
-        4. Creates or updates Sales Orders in ERPNext
-        5. Updates sync status and logs results
-        
-        Handles errors gracefully, continuing with other orders if one fails.
-        """
         if not self.sync_config["enable_sync"]:
             WooCommerceLogger.log_error("WooCommerce sync is disabled")
             return
 
         WooCommerceLogger.log_sync_start()
         try:
-            # Get orders from WooCommerce with all statuses
             response = self.wcapi.get("orders", params={
                 "status": "pending,processing,on-hold,completed,cancelled,refunded,failed"
             })
@@ -112,7 +117,6 @@ class WooCommerceSync:
 
             for order in orders:
                 try:
-                    # Validate order data first
                     self.validate_woocommerce_order(order)
                     self.create_erpnext_order(order)
                     successful_syncs += 1
@@ -135,12 +139,10 @@ class WooCommerceSync:
                     )
                     skipped_orders.append(error_details)
 
-            # Update sync status
             self.sync_config["last_sync"] = now_datetime()
             self.sync_config["sync_status"] = "Partial Success" if failed_syncs > 0 else "Success"
             self.save_sync_status()
 
-            # Log final sync summary
             WooCommerceLogger.log(
                 "Sync",
                 "Info",
@@ -161,24 +163,6 @@ class WooCommerceSync:
             WooCommerceLogger.log_error("WooCommerce Sync Error", e)
 
     def validate_api_response(self, response, operation="fetch orders"):
-        """
-        Validate the response from WooCommerce API.
-        
-        Checks:
-        - HTTP status code is 200
-        - Response is valid JSON
-        - Response is a list (for order queries)
-        
-        Args:
-            response: HTTP response object from WooCommerce API
-            operation (str): Description of the operation being performed (for error messages)
-        
-        Returns:
-            list: Parsed JSON data from the response
-        
-        Raises:
-            ValueError: If response is invalid or cannot be parsed
-        """
         if response.status_code != 200:
             error_msg = f"WooCommerce API error during {operation}: {response.status_code} - {response.text}"
             WooCommerceLogger.log_error(error_msg, details={
@@ -188,7 +172,6 @@ class WooCommerceSync:
             })
             raise ValueError(error_msg)
         
-        # Check if response is valid JSON
         try:
             data = response.json()
             if not isinstance(data, list):
@@ -202,27 +185,8 @@ class WooCommerceSync:
             raise ValueError(error_msg)
 
     def validate_woocommerce_order(self, wc_order):
-        """
-        Validate WooCommerce order data before processing.
-        
-        Checks for required fields:
-        - Order ID
-        - Billing information (especially email)
-        - Line items with valid names, quantities, and prices
-        - Valid order status
-        
-        Args:
-            wc_order (dict): WooCommerce order data dictionary
-        
-        Returns:
-            bool: True if order is valid
-        
-        Raises:
-            ValueError: If order validation fails with list of error messages
-        """
         errors = []
         
-        # Check required fields
         if not wc_order.get("id"):
             errors.append("Order ID is missing")
         
@@ -234,7 +198,6 @@ class WooCommerceSync:
         if not wc_order.get("line_items"):
             errors.append("Order has no line items")
         else:
-            # Validate each line item
             for i, item in enumerate(wc_order["line_items"]):
                 if not item.get("name"):
                     errors.append(f"Line item {i+1} has no name")
@@ -244,7 +207,6 @@ class WooCommerceSync:
                 if price is None or price == "" or (isinstance(price, (int, float)) and str(price).lower() == "nan"):
                     errors.append(f"Line item {i+1} has no price")
         
-        # Check for valid status
         valid_statuses = ["pending", "processing", "on-hold", "completed", "cancelled", "refunded", "failed"]
         if wc_order.get("status") not in valid_statuses:
             errors.append(f"Invalid order status: {wc_order.get('status')}")
@@ -255,23 +217,8 @@ class WooCommerceSync:
         return True
 
     def update_order_with_retry(self, order_doc, new_status, max_retries=3):
-        """
-        Update order status with retry logic to handle database conflicts.
-        
-        This method attempts to update an order's status, retrying if database
-        conflicts occur (e.g., document was modified by another process).
-        
-        Args:
-            order_doc: ERPNext Sales Order document
-            new_status (str): Target status to update to
-            max_retries (int): Maximum number of retry attempts (default: 3)
-        
-        Returns:
-            tuple: (success: bool, message: str)
-        """
         for attempt in range(max_retries):
             try:
-                # Reload the document to get the latest state
                 if attempt > 0:
                     order_doc = frappe.get_doc("Sales Order", order_doc.name)
                 
@@ -289,40 +236,21 @@ class WooCommerceSync:
                     })
                     frappe.db.rollback()
                     import time
-                    time.sleep(1)  # Brief pause before retry
+                    time.sleep(1)
                 else:
                     return False, f"Failed after {max_retries} attempts: {str(e)}"
         
         return False, "Max retries exceeded"
 
     def can_update_order_status(self, order_doc, new_status):
-        """
-        Check if an order can be updated to the new status based on business rules.
-        
-        Business rules:
-        - Draft orders can be updated to any status
-        - Submitted orders have restricted status transitions
-        - Cancelled orders cannot be updated
-        - Orders already in target status don't need updates
-        
-        Args:
-            order_doc: ERPNext Sales Order document
-            new_status (str): Target status to check
-        
-        Returns:
-            tuple: (can_update: bool, reason: str)
-        """
-        # If order is already in the target status, no update needed
         if order_doc.status == new_status:
             return False, "Order already in target status"
         
-        # Check if order is in a state that allows status updates
-        if order_doc.docstatus == 1:  # Submitted
-            # For submitted orders, only allow certain status transitions
+        if order_doc.docstatus == 1:
             allowed_transitions = {
                 "To Deliver and Bill": ["Completed", "Cancelled"],
                 "Completed": ["Cancelled"],
-                "Cancelled": []  # No further transitions from cancelled
+                "Cancelled": []
             }
             current_status = order_doc.status
             if current_status in allowed_transitions and new_status in allowed_transitions[current_status]:
@@ -330,32 +258,13 @@ class WooCommerceSync:
             else:
                 return False, f"Invalid status transition from {current_status} to {new_status}"
         
-        elif order_doc.docstatus == 0:  # Draft
-            # Draft orders can be updated to any status
+        elif order_doc.docstatus == 0:
             return True, "Draft order can be updated"
         
-        else:  # Cancelled
+        else:
             return False, "Cancelled order cannot be updated"
     
     def get_erpnext_status(self, wc_status):
-        """
-        Map WooCommerce order status to ERPNext Sales Order status.
-        
-        Status mapping:
-        - pending -> Draft
-        - processing -> To Deliver and Bill
-        - on-hold -> On Hold
-        - completed -> Completed
-        - cancelled -> Cancelled
-        - refunded -> Closed
-        - failed -> Cancelled
-        
-        Args:
-            wc_status (str): WooCommerce order status
-        
-        Returns:
-            str: Corresponding ERPNext status (defaults to "Draft" if unknown)
-        """
         status_mapping = {
             "pending": "Draft",
             "processing": "To Deliver and Bill",
@@ -370,24 +279,21 @@ class WooCommerceSync:
     def create_erpnext_order(self, wc_order):
         """
         Create or update a Sales Order in ERPNext from a WooCommerce order.
-        
-        This is the main order creation method that:
-        1. Checks if order already exists (by woocommerce_order_id)
-        2. If exists, updates status if needed
-        3. If new, creates customer, items, and sales order
-        4. Submits the order if not in Draft/Cancelled status
-        
-        Args:
-            wc_order (dict): WooCommerce order data dictionary
-        
-        Raises:
-            ValueError: If order creation/update fails
+        Includes store location sync from WooCommerce checkout.
         """
         try:
             WooCommerceLogger.log("Order", "Info", f"Starting order sync for WooCommerce order {wc_order.get('id')}")
             
-            # Order validation is now done in validate_woocommerce_order method
             WooCommerceLogger.log("Order", "Info", "Order validation passed", details={"order_id": wc_order.get("id")})
+
+            # Extract store location from WooCommerce order
+            store_location, store_location_key = self.get_store_location(wc_order)
+            WooCommerceLogger.log(
+                "Order", 
+                "Info", 
+                f"Store location extracted: '{store_location}' (key: {store_location_key})",
+                details={"order_id": wc_order.get("id"), "store_location": store_location}
+            )
 
             # Check if order already exists
             existing_order = frappe.get_all(
@@ -399,11 +305,20 @@ class WooCommerceSync:
             if existing_order:
                 WooCommerceLogger.log("Order", "Info", f"Order {wc_order['id']} already exists. Checking for status update.")
                 try:
-                    # Update existing order status if needed
                     existing_order_doc = frappe.get_doc("Sales Order", existing_order[0]["name"])
                     new_status = self.get_erpnext_status(wc_order["status"])
 
-                    # Check if order can be updated
+                    # Update store location if changed and document is draft
+                    if existing_order_doc.docstatus == 0 and store_location:
+                        if hasattr(existing_order_doc, 'custom_store_location'):
+                            if existing_order_doc.custom_store_location != store_location:
+                                WooCommerceLogger.log(
+                                    "Order", 
+                                    "Info", 
+                                    f"Updating store location from '{existing_order_doc.custom_store_location}' to '{store_location}'"
+                                )
+                                existing_order_doc.custom_store_location = store_location
+
                     can_update, reason = self.can_update_order_status(existing_order_doc, new_status)
                     
                     if can_update:
@@ -411,7 +326,12 @@ class WooCommerceSync:
                         success, message = self.update_order_with_retry(existing_order_doc, new_status)
                         
                         if success:
-                            WooCommerceLogger.log("Order", "Success", f"Updated existing order status: {message}", details={"order_id": wc_order["id"], "old_status": existing_order_doc.status, "new_status": new_status})
+                            WooCommerceLogger.log("Order", "Success", f"Updated existing order status: {message}", details={
+                                "order_id": wc_order["id"], 
+                                "old_status": existing_order_doc.status, 
+                                "new_status": new_status,
+                                "store_location": store_location
+                            })
                         else:
                             raise ValueError(f"Failed to update order status: {message}")
                     else:
@@ -423,7 +343,6 @@ class WooCommerceSync:
                             "reason": reason
                         })
                     
-                    # Log successful handling of existing order (whether updated or not)
                     WooCommerceLogger.log_order_creation(wc_order["id"], True, reference_name=existing_order_doc.name)
                     return
                     
@@ -434,7 +353,6 @@ class WooCommerceSync:
                         "existing_order_name": existing_order[0]["name"],
                         "error": str(e)
                     })
-                    # Don't return here - let the error propagate to be handled by the main sync loop
                     raise ValueError(error_msg)
 
             # Get or create customer
@@ -463,9 +381,10 @@ class WooCommerceSync:
 
             WooCommerceLogger.log("Order", "Info", "Tax info retrieved", details={"tax_template": tax_template, "tax_details": tax_details})
 
-            # Create Sales Order
+            # Create Sales Order with store location
             WooCommerceLogger.log("Order", "Info", f"Creating Sales Order document for WooCommerce order {wc_order['id']}")
-            sales_order = frappe.get_doc({
+            
+            sales_order_data = {
                 "doctype": "Sales Order",
                 "customer": customer,
                 "delivery_date": frappe.utils.today(),
@@ -474,12 +393,22 @@ class WooCommerceSync:
                 "taxes_and_charges": tax_template,
                 "taxes": tax_details,
                 "status": self.get_erpnext_status(wc_order["status"])
-            })
+            }
+            
+            # Add store location if available
+            if store_location:
+                sales_order_data["custom_store_location"] = store_location
+                WooCommerceLogger.log(
+                    "Order", 
+                    "Info", 
+                    f"Adding store location to Sales Order: {store_location}"
+                )
+            
+            sales_order = frappe.get_doc(sales_order_data)
 
             WooCommerceLogger.log("Order", "Info", f"Inserting Sales Order document for {wc_order['id']}")
             sales_order.insert()
 
-            # Submit Sales Order if not in Draft or Cancelled
             if sales_order.status not in ["Draft", "Cancelled"]:
                 WooCommerceLogger.log("Order", "Info", f"Submitting Sales Order {sales_order.name}")
                 sales_order.submit()
@@ -491,35 +420,25 @@ class WooCommerceSync:
                 True,
                 reference_name=sales_order.name
             )
+            
+            WooCommerceLogger.log(
+                "Order",
+                "Success",
+                f"Sales Order {sales_order.name} created successfully",
+                details={
+                    "woocommerce_order_id": wc_order["id"],
+                    "erpnext_order": sales_order.name,
+                    "store_location": store_location,
+                    "customer": customer,
+                    "status": sales_order.status
+                }
+            )
 
         except Exception as e:
             WooCommerceLogger.log_order_creation(wc_order["id"], False, e)
             raise
 
-
     def get_or_create_customer(self, wc_order):
-        """
-        Get existing customer or create a new one in ERPNext.
-        
-        Customer lookup strategy:
-        1. First checks by woocommerce_customer_id (if available in order)
-        2. If not found, creates new customer from billing information
-        3. Ensures required Customer Group and Territory exist
-        
-        Customer data is populated from WooCommerce billing information:
-        - Name from first_name + last_name (or email username as fallback)
-        - Email, phone, address fields from billing data
-        - Links customer to WooCommerce via woocommerce_customer_id field
-        
-        Args:
-            wc_order (dict): WooCommerce order data dictionary
-        
-        Returns:
-            str: Customer name (ERPNext customer ID)
-        
-        Raises:
-            Exception: If customer creation fails
-        """
         try:
             customer_email = wc_order["billing"]["email"]
             woocommerce_customer_id = wc_order.get("customer_id")
@@ -559,7 +478,6 @@ class WooCommerceSync:
                     details={"wc_order": wc_order}
                 )
 
-            # Ensure Customer Group exists
             customer_group = "All Customer Groups"
             if not frappe.db.exists("Customer Group", customer_group):
                 customer_group_doc = frappe.get_doc({
@@ -571,7 +489,6 @@ class WooCommerceSync:
                 customer_group_doc.insert(ignore_permissions=True)
                 frappe.db.commit()
 
-            # Ensure Territory exists
             territory = "All Territories"
             if not frappe.db.exists("Territory", territory):
                 territory_doc = frappe.get_doc({
@@ -583,7 +500,6 @@ class WooCommerceSync:
                 territory_doc.insert(ignore_permissions=True)
                 frappe.db.commit()
 
-            # Create customer name from billing information
             first_name = wc_order["billing"].get("first_name", "").strip()
             last_name = wc_order["billing"].get("last_name", "").strip()
             if not first_name and not last_name:
@@ -593,7 +509,6 @@ class WooCommerceSync:
             if not customer_name:
                 customer_name = f"WooCommerce Customer {frappe.generate_hash(length=4)}"
 
-            # Create new customer, set woocommerce_customer_id if available
             customer_data = {
                 "doctype": "Customer",
                 "customer_name": customer_name,
@@ -627,23 +542,8 @@ class WooCommerceSync:
             raise
 
     def get_order_items(self, wc_order):
-        """
-        Process WooCommerce line items and convert them to ERPNext Sales Order items.
-        
-        For each line item:
-        1. Gets or creates the item in ERPNext
-        2. Extracts quantity, price, and total
-        3. Creates item dictionary for Sales Order
-        
-        Args:
-            wc_order (dict): WooCommerce order data dictionary
-        
-        Returns:
-            list: List of item dictionaries for ERPNext Sales Order
-        """
         items = []
         for item in wc_order["line_items"]:
-            # Get or create item
             item_code = self.get_or_create_item(item)
             
             items.append({
@@ -655,33 +555,7 @@ class WooCommerceSync:
         return items
 
     def get_or_create_item(self, wc_item):
-        """
-        Get existing item or create a new one in ERPNext.
-        
-        Item lookup strategy:
-        1. Extracts SKU from item's main 'sku' field
-        2. If not found, searches in meta_data for SKU
-        3. If still not found, checks _ywapo_meta_data for SKU
-        4. If no SKU exists, generates a fallback item code from item name
-        
-        Item creation:
-        - Uses SKU as item_code if available
-        - Sets item_name from WooCommerce product name
-        - Sets default item_group and stock_uom
-        - Marks as stock item, sales item, and purchase item
-        
-        Args:
-            wc_item (dict): WooCommerce line item data dictionary
-        
-        Returns:
-            str: Item code (ERPNext item ID)
-        
-        Raises:
-            Exception: If item creation fails
-        """
         try:
-            # Generate item code from SKU or product name
-        # Try to get SKU from main field first
             WooCommerceLogger.log(
                 "Item",
                 "Info",
@@ -690,7 +564,6 @@ class WooCommerceSync:
             )
             item_code = wc_item.get("sku")
 
-            # If not available, try fetching it from meta_data
             if not item_code:
                 for meta in wc_item.get("meta_data", []):
                     key = meta.get("key", "").strip().lower()
@@ -699,7 +572,6 @@ class WooCommerceSync:
                         item_code = meta.get("value")
                         break
 
-            # Still not found? Try to extract from _ywapo_meta_data
             if not item_code:
                 for meta in wc_item.get("meta_data", []):
                     if meta.get("key") == "_ywapo_meta_data":
@@ -715,7 +587,6 @@ class WooCommerceSync:
                     if item_code:
                         break
 
-            # If still no SKU, generate fallback item_code
             if not item_code:
                 item_code = frappe.scrub(wc_item["name"])[:20]
                 item_code = f"{item_code}-{frappe.generate_hash(length=4)}"
@@ -747,9 +618,6 @@ class WooCommerceSync:
                 )
                 return existing_item[0]["name"]
 
-            # default_item_group = frappe.db.get_single_value("Stock Settings", "default_item_group") or "All Item Groups"
-            # default_uom = frappe.db.get_single_value("Stock Settings", "stock_uom") or "Nos"
-            # Create new item
             item = frappe.get_doc({
                 "doctype": "Item",
                 "item_code": item_code,
@@ -774,31 +642,9 @@ class WooCommerceSync:
             raise
 
     def get_tax_template(self):
-        """
-        Get the default tax template from ERPNext.
-        
-        Returns:
-            str: Name of the default tax template, or None if not found
-        """
         return frappe.get_value("Tax Template", {"is_default": 1}, "name")
 
     def get_tax_details(self, wc_order):
-        """
-        Extract tax information from WooCommerce order and format for ERPNext.
-        
-        Processes WooCommerce tax_lines and converts them to ERPNext tax entries.
-        Each tax line becomes a tax entry with:
-        - Charge type: On Net Total
-        - Account head: Default tax account
-        - Rate: Tax rate from WooCommerce
-        - Description: Tax label from WooCommerce
-        
-        Args:
-            wc_order (dict): WooCommerce order data dictionary
-        
-        Returns:
-            list: List of tax dictionaries for ERPNext Sales Order
-        """
         tax_details = []
         if wc_order.get("tax_lines"):
             for tax in wc_order["tax_lines"]:
@@ -811,22 +657,9 @@ class WooCommerceSync:
         return tax_details
 
     def get_tax_account(self):
-        """
-        Get the default tax account from ERPNext.
-        
-        Returns:
-            str: Name of the default tax account, or None if not found
-        """
         return frappe.get_value("Account", {"is_default": 1, "account_type": "Tax"}, "name")
 
     def save_sync_status(self):
-        """
-        Save the current sync status to the WooCommerce Settings doctype.
-        
-        Updates:
-        - last_sync: Timestamp of last sync
-        - sync_status: Current sync status (Success/Failed/Partial Success)
-        """
         try:
             update_sync_status(
                 last_sync=self.sync_config.get("last_sync"),
@@ -836,15 +669,6 @@ class WooCommerceSync:
             WooCommerceLogger.log_error("Failed to save sync status", e)
 
     def get_sync_status(self):
-        """
-        Get the current synchronization status from WooCommerce Settings.
-        
-        Returns:
-            dict: Dictionary containing:
-                - last_sync: Timestamp of last sync
-                - sync_status: Current sync status
-                - enable_sync: Whether sync is enabled
-        """
         try:
             sync_config = get_sync_config()
             return {
@@ -861,29 +685,9 @@ class WooCommerceSync:
             }
 
     def sync_invoice_to_woocommerce(self, invoice_name):
-        """
-        Sync an ERPNext Sales Invoice back to WooCommerce.
-        
-        This method:
-        1. Retrieves the Sales Invoice from ERPNext
-        2. Gets the linked WooCommerce order ID from the associated Sales Order
-        3. Updates the WooCommerce order status to "completed"
-        4. Adds metadata linking the invoice to the WooCommerce order
-        
-        Args:
-            invoice_name (str): Name of the ERPNext Sales Invoice
-        
-        Returns:
-            dict: Status dictionary with success message and WooCommerce order ID
-        
-        Raises:
-            ValueError: If invoice or WooCommerce order ID not found
-        """
         try:
-            # Get the invoice
             invoice = frappe.get_doc("Sales Invoice", invoice_name)
             
-            # Get the linked WooCommerce order ID
             woocommerce_order_id = None
             if invoice.sales_order:
                 sales_order = frappe.get_doc("Sales Order", invoice.sales_order)
@@ -892,7 +696,6 @@ class WooCommerceSync:
             if not woocommerce_order_id:
                 raise ValueError("No WooCommerce order ID found for this invoice")
 
-            # Prepare invoice data for WooCommerce
             invoice_data = {
                 "status": "completed",
                 "meta_data": [
@@ -903,13 +706,11 @@ class WooCommerceSync:
                 ]
             }
 
-            # Update the order in WooCommerce
             response = self.wcapi.put(f"orders/{woocommerce_order_id}", invoice_data)
             
             if response.status_code not in [200, 201]:
                 raise ValueError(f"Failed to update WooCommerce order: {response.text}")
 
-            # Log success
             WooCommerceLogger.log(
                 "Invoice",
                 "Success",
@@ -940,25 +741,6 @@ class WooCommerceSync:
             raise
 
     def get_invoice_sync_status(self, invoice_name):
-        """
-        Check if a Sales Invoice has been synced to WooCommerce.
-        
-        This method:
-        1. Retrieves the Sales Invoice
-        2. Gets the linked WooCommerce order ID
-        3. Fetches the WooCommerce order
-        4. Checks if invoice metadata exists in WooCommerce order
-        
-        Args:
-            invoice_name (str): Name of the ERPNext Sales Invoice
-        
-        Returns:
-            dict: Status dictionary with:
-                - status: "success" or "Failed"
-                - is_synced: Boolean indicating if invoice is synced
-                - woocommerce_order_id: Linked WooCommerce order ID
-                - woocommerce_order_status: Current WooCommerce order status
-        """
         try:
             invoice = frappe.get_doc("Sales Invoice", invoice_name)
             if not invoice.sales_order:
@@ -974,7 +756,6 @@ class WooCommerceSync:
                     "message": "No WooCommerce order linked to this invoice"
                 }
 
-            # Check if invoice is already synced
             response = self.wcapi.get(f"orders/{sales_order.woocommerce_order_id}")
             if response.status_code != 200:
                 return {
@@ -999,4 +780,4 @@ class WooCommerceSync:
             return {
                 "status": "Failed",
                 "message": str(e)
-            } 
+            }
