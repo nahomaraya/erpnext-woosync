@@ -286,11 +286,11 @@ class WooCommerceSync:
             
             WooCommerceLogger.log("Order", "Info", "Order validation passed", details={"order_id": wc_order.get("id")})
 
-            # Extract store location from WooCommerce order
+            # Extract store location from WooCommerce order (used to determine customer)
             store_location, store_location_key = self.get_store_location(wc_order)
             WooCommerceLogger.log(
-                "Order", 
-                "Info", 
+                "Order",
+                "Info",
                 f"Store location extracted: '{store_location}' (key: {store_location_key})",
                 details={"order_id": wc_order.get("id"), "store_location": store_location}
             )
@@ -307,17 +307,6 @@ class WooCommerceSync:
                 try:
                     existing_order_doc = frappe.get_doc("Sales Order", existing_order[0]["name"])
                     new_status = self.get_erpnext_status(wc_order["status"])
-
-                    # Update store location if changed and document is draft
-                    if existing_order_doc.docstatus == 0 and store_location:
-                        if hasattr(existing_order_doc, 'custom_store_location'):
-                            if existing_order_doc.custom_store_location != store_location:
-                                WooCommerceLogger.log(
-                                    "Order", 
-                                    "Info", 
-                                    f"Updating store location from '{existing_order_doc.custom_store_location}' to '{store_location}'"
-                                )
-                                existing_order_doc.custom_store_location = store_location
 
                     can_update, reason = self.can_update_order_status(existing_order_doc, new_status)
                     
@@ -355,10 +344,10 @@ class WooCommerceSync:
                     })
                     raise ValueError(error_msg)
 
-            # Get or create customer
+            # Get or create customer (based on WooCommerce customer_id and store location)
             WooCommerceLogger.log("Order", "Info", f"Getting or creating customer for order {wc_order['id']}")
             try:
-                customer = self.get_or_create_customer(wc_order)
+                customer = self.get_or_create_customer(wc_order, store_location=store_location)
             except Exception as e:
                 raise ValueError(f"Failed to create/get customer: {str(e)}")
 
@@ -381,7 +370,7 @@ class WooCommerceSync:
 
             WooCommerceLogger.log("Order", "Info", "Tax info retrieved", details={"tax_template": tax_template, "tax_details": tax_details})
 
-            # Create Sales Order with store location
+            # Create Sales Order for resolved customer
             WooCommerceLogger.log("Order", "Info", f"Creating Sales Order document for WooCommerce order {wc_order['id']}")
             
             sales_order_data = {
@@ -394,15 +383,6 @@ class WooCommerceSync:
                 "taxes": tax_details,
                 "status": self.get_erpnext_status(wc_order["status"])
             }
-            
-            # Add store location if available
-            if store_location:
-                sales_order_data["custom_store_location"] = store_location
-                WooCommerceLogger.log(
-                    "Order", 
-                    "Info", 
-                    f"Adding store location to Sales Order: {store_location}"
-                )
             
             sales_order = frappe.get_doc(sales_order_data)
 
@@ -428,7 +408,6 @@ class WooCommerceSync:
                 details={
                     "woocommerce_order_id": wc_order["id"],
                     "erpnext_order": sales_order.name,
-                    "store_location": store_location,
                     "customer": customer,
                     "status": sales_order.status
                 }
@@ -438,45 +417,48 @@ class WooCommerceSync:
             WooCommerceLogger.log_order_creation(wc_order["id"], False, e)
             raise
 
-    def get_or_create_customer(self, wc_order):
+    def get_or_create_customer(self, wc_order, store_location=None):
         try:
             customer_email = wc_order["billing"]["email"]
             woocommerce_customer_id = wc_order.get("customer_id")
 
-            if woocommerce_customer_id:
-                WooCommerceLogger.log(
-                    "Customer",
-                    "Info",
-                    f"Using woocommerce_customer_id from customer_id: {woocommerce_customer_id}",
-                    details={"customer_id": woocommerce_customer_id, "wc_order": wc_order}
-                )
-                existing_customer = frappe.get_all(
-                    "Customer",
-                    filters={"woocommerce_customer_id": str(woocommerce_customer_id)},
-                    fields=["name"]
-                )
-                if existing_customer:
+            # Primary behavior: always treat the selected store location as the customer
+            if store_location:
+                store_location_name = store_location.strip()
+                if store_location_name:
                     WooCommerceLogger.log(
                         "Customer",
                         "Info",
-                        f"Found existing customer by WooCommerce ID: {existing_customer[0]['name']}",
-                        details={"woocommerce_customer_id": woocommerce_customer_id, "wc_order": wc_order}
+                        f"Resolving customer by store location: {store_location_name}",
+                        details={
+                            "store_location": store_location_name,
+                            "woocommerce_customer_id": woocommerce_customer_id,
+                            "wc_order": wc_order,
+                        },
                     )
-                    return existing_customer[0]["name"]
-                else:
+
+                    # Try to find existing customer with this store location as the name
+                    existing_customer = frappe.get_all(
+                        "Customer",
+                        filters={"customer_name": store_location_name},
+                        fields=["name"],
+                    )
+                    if existing_customer:
+                        WooCommerceLogger.log(
+                            "Customer",
+                            "Info",
+                            f"Found existing customer for store location: {existing_customer[0]['name']}",
+                            details={"store_location": store_location_name},
+                        )
+                        return existing_customer[0]["name"]
+
                     WooCommerceLogger.log(
                         "Customer",
                         "Info",
-                        f"No customer found with woocommerce_customer_id: {woocommerce_customer_id}. Proceeding to create new customer.",
-                        details={"woocommerce_customer_id": woocommerce_customer_id, "wc_order": wc_order}
+                        f"No customer found for store location '{store_location_name}'. Proceeding to create new customer.",
+                        details={"store_location": store_location_name},
                     )
-            else:
-                WooCommerceLogger.log(
-                    "Customer",
-                    "Info",
-                    "No woocommerce_customer_id (customer_id) present in order. Proceeding to create new customer.",
-                    details={"wc_order": wc_order}
-                )
+
 
             customer_group = "All Customer Groups"
             if not frappe.db.exists("Customer Group", customer_group):
@@ -500,12 +482,23 @@ class WooCommerceSync:
                 territory_doc.insert(ignore_permissions=True)
                 frappe.db.commit()
 
+            # Determine customer name:
+            # 1. Prefer the selected store location from WooCommerce checkout
+            # 2. Fallback to billing name
+            # 3. Fallback to email prefix
+            # 4. Fallback to generated WooCommerce Customer name
             first_name = wc_order["billing"].get("first_name", "").strip()
             last_name = wc_order["billing"].get("last_name", "").strip()
-            if not first_name and not last_name:
+
+            if store_location:
+                customer_name = store_location.strip()
+            elif first_name or last_name:
+                customer_name = f"{first_name} {last_name}".strip()
+            elif customer_email:
                 customer_name = customer_email.split("@")[0]
             else:
-                customer_name = f"{first_name} {last_name}".strip()
+                customer_name = ""
+
             if not customer_name:
                 customer_name = f"WooCommerce Customer {frappe.generate_hash(length=4)}"
 
