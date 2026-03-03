@@ -66,7 +66,7 @@ class WooCommerceSync:
         store_location_key = ""
         
         for meta in wc_order.get("meta_data", []):
-            meta_key = meta.get("key", "")
+            meta_key = (meta.get("key") or "").strip().lower()
             
             # Get the store location value (e.g., "Montreal")
             if meta_key == "_selected_store_location":
