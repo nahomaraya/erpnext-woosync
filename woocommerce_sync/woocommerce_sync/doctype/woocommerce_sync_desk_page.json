@@ -1,0 +1,13 @@
+{
+    "name": "woocommerce_sync_desk_page",
+    "module": "Woocommerce Sync",
+    "doctype": "Page",
+    "title": "WooCommerce Sync",
+    "route": "woocommerce-sync",
+    "icon": "octicon octicon-sync",
+    "content": "",
+    "script": "/assets/woocommerce_sync/js/woocommerce_sync.js",
+    "style": "",
+    "standard": 1,
+    "developer_mode": 1
+}
