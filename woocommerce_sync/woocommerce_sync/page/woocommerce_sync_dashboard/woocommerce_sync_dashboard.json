@@ -1,0 +1,7 @@
+{
+    "doctype": "Page",
+    "name": "woocommerce-sync-dashboard",
+    "title": "WooCommerce Sync",
+    "module": "WooCommerce Sync",
+    "standard": 1
+  }

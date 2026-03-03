@@ -1,0 +1,37 @@
+<div class="container">
+    <div class="row">
+        <div class="col-md-12">
+            <h1>WooCommerce to ERPNext Sync</h1>
+
+            <div class="card mt-4">
+                <div class="card-body">
+                    <h5 class="card-title">Sync Status</h5>
+                    <div id="sync-status">
+                        <p>Last Sync: <span id="last-sync">-</span></p>
+                        <p>Status: <span id="status">-</span></p>
+                    </div>
+                    <div id="connection-test-result" class="mt-3"></div>
+                </div>
+            </div>
+
+            <div class="card mt-4">
+                <div class="card-body">
+                    <h5 class="card-title">Sync Logs</h5>
+                    <p class="text-muted">View detailed logs of WooCommerce synchronization activities.</p>
+                    <a href="/app/woocommerce-sync-log" class="btn btn-secondary" target="_blank">
+                        <i class="fa fa-list"></i> View Sync Logs
+                    </a>
+                </div>
+            </div>
+
+            <div class="card mt-4">
+                <div class="card-body">
+                    <h5 class="card-title">Manual Sync</h5>
+                    <p class="text-muted">This will sync all processing orders from WooCommerce to ERPNext.</p>
+                    <button class="btn btn-primary" id="sync-button">Sync from WooCommerce</button>
+                    <div id="sync-message" class="mt-3"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
